@@ -35,19 +35,21 @@ namespace GCMonitor
     [KSPAddon(KSPAddon.Startup.Instantly, false)]
     public class GCMonitor : MonoBehaviour
     {
-        private const int size = 800;
+        private const int width = 800;
+        private const int height = 350;
 
         public Rect windowPos = new Rect(40, 40, 400, 200);
-        public bool showUI = false;
-        Texture2D memoryTexture = new Texture2D(size, 350);
+        public bool showUI = true;
+        Texture2D memoryTexture = new Texture2D(width, height);
         float ratio;
+        bool colorfulMode = false;
 
         int timeScale = 1;
 
         bool killThread = false;
         //bool loopThread = false;
 
-        memoryState[] memoryHistory = new memoryState[size];
+        memoryState[] memoryHistory = new memoryState[width];
 
         int activeSecond = 0;
         int previousActiveSecond = 0;
@@ -59,6 +61,10 @@ namespace GCMonitor
         long displayMaxMemory = 200;
         long maxMemory = 200;
         long lastMem = long.MaxValue;
+
+        Texture2D cat;
+        Color[] catPixels;
+        Color[] blackSquare;
 
         //object CurrentProcess;
         //MethodInfo PrivateMemorySize64;
@@ -77,7 +83,15 @@ namespace GCMonitor
         {
             DontDestroyOnLoad(this.gameObject);
 
-            UpdateTexture(0);
+            cat = new Texture2D(33, 20, TextureFormat.ARGB32, false);
+            cat.LoadImage(Properties.Resources.cat);
+            catPixels = cat.GetPixels();
+            blackSquare = new Color[32 * height];
+            for (int i = 0; i < blackSquare.Length; i++)
+                blackSquare[i] = Color.black;
+
+            //UpdateTexture(0);
+
 
             //Type Process = Type.GetType("System.Diagnostics.Process,System");
             //CurrentProcess = Process.GetMethod("GetCurrentProcess", BindingFlags.Static | BindingFlags.Public).Invoke(null, null);
@@ -98,7 +112,7 @@ namespace GCMonitor
 
         public void Update()
         {
-            if (GameSettings.MODIFIER_KEY.GetKey() && Input.GetKeyDown(KeyCode.F2))
+            if (GameSettings.MODIFIER_KEY.GetKey() && Input.GetKeyDown(KeyCode.F1))
             {
                 showUI = !showUI;
             }
@@ -120,7 +134,7 @@ namespace GCMonitor
                 {
                     while (lastDisplayedSecond != localdisplayUpToSecond)
                     {
-                        lastDisplayedSecond = (lastDisplayedSecond + 1) % size;
+                        lastDisplayedSecond = (lastDisplayedSecond + 1) % width;
                         UpdateTexture(lastDisplayedSecond, localdisplayUpToSecond);
                     }
                     memoryTexture.Apply();
@@ -130,7 +144,7 @@ namespace GCMonitor
 
         public void memoryHistoryUpdate()
         {
-            activeSecond = Mathf.FloorToInt(Time.unscaledTime * timeScale) % size;
+            activeSecond = Mathf.FloorToInt(Time.unscaledTime * timeScale) % width;
 
             long mem = GC.GetTotalMemory(false);
 
@@ -224,27 +238,36 @@ namespace GCMonitor
             int min = Mathf.RoundToInt(ratio * (float)memoryHistory[x].min);
             int max = Mathf.RoundToInt(ratio * (float)memoryHistory[x].max);
 
-            int xPlus1 = (x + 1) % size;
-            int xPlus2 = (x + 2) % size;
+            int xPlus1 = (x + 1) % width;
+            int xPlus2 = (x + 2) % width;
 
-            for (int y = 0; y < memoryTexture.height; y++)
+            if (!colorfulMode)
             {
-                if (y < 10 * memoryHistory[x].gc)
-                    color = Color.red;
-                else if (y <= min)
-                    color = Color.grey;
-                else if (y <= max)
-                    color = Color.green;
-                else
-                    color = Color.black;
-
-                memoryTexture.SetPixel(x, y, color);
-
-                if (x == last)
+                for (int y = 0; y < memoryTexture.height; y++)
                 {
-                    memoryTexture.SetPixel(xPlus1, y, Color.black);
-                    memoryTexture.SetPixel(xPlus2, y, Color.black);
+                    if (y < 10 * memoryHistory[x].gc)
+                        color = Color.red;
+                    else if (y <= min && max != 0)
+                        color = Color.grey;
+                    else if (y <= max && max != 0)
+                        color = Color.green;
+                    else
+                        color = Color.black;
+
+                    memoryTexture.SetPixel(x, y, color);
+
+                    if (x == last)
+                    {
+                        memoryTexture.SetPixel(xPlus1, y, Color.black);
+                        memoryTexture.SetPixel(xPlus2, y, Color.black);
+                    }
                 }
+            }
+            else
+            {
+                memoryTexture.SetPixels(x, 0, cat.width-1, height, blackSquare);
+                if (max != 0)
+                    memoryTexture.SetPixels(x, max, cat.width, cat.height, catPixels);
             }
         }
 
@@ -269,7 +292,7 @@ namespace GCMonitor
                 if (timeScale > 1)
                 {
                     timeScale = timeScale / 2;
-                    memoryHistory = new memoryState[size];
+                    memoryHistory = new memoryState[width];
                     fullUpdate = true;
                 }
             }
@@ -279,7 +302,7 @@ namespace GCMonitor
                 if (timeScale < 8)
                 {
                     timeScale = timeScale * 2;
-                    memoryHistory = new memoryState[size];
+                    memoryHistory = new memoryState[width];
                     fullUpdate = true;
                 }
             }
@@ -292,6 +315,10 @@ namespace GCMonitor
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
+            colorfulMode = GUILayout.Toggle(colorfulMode, "More Color Mode");
+            if (colorfulMode)
+                timeScale = 10;
+
             GUILayout.Label("Allocated: " + (Profiler.GetTotalAllocatedMemory() / 1024 / 1024).ToString("###") + "MB");
             GUILayout.Label("Reserved: " + (Profiler.GetTotalReservedMemory() / 1024 / 1024).ToString("###") + "MB");
             GUILayout.EndHorizontal();
