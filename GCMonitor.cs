@@ -57,6 +57,7 @@ namespace GCMonitor
         int lastDisplayedSecond = 0;
 
         bool fullUpdate = true;
+        bool OnlyUpdateWhenDisplayed = false;
 
         long displayMaxMemory = 200;
         long maxMemory = 200;
@@ -186,8 +187,10 @@ namespace GCMonitor
         {
             while (true)
             {
-                memoryHistoryUpdate();
-
+                if (!OnlyUpdateWhenDisplayed || showUI)
+                {
+                    memoryHistoryUpdate();
+                }
                 // Removed since those does not work under our mono version :(
                 //while (loopThread)
                 //{
@@ -306,12 +309,11 @@ namespace GCMonitor
                     fullUpdate = true;
                 }
             }
-
             GUILayout.Space(30);
 
-            GUILayout.Label("Last interval min: " + (memoryHistory[activeSecond].min / 1024 / 1024).ToString("###") + "MB"
-                + " max: " + (memoryHistory[activeSecond].max / 1024 / 1024).ToString("###") + "MB" );
-            GUILayout.Label("Maximum reported: " + (maxMemory / 1024 / 1024).ToString("###") + "MB");
+            GUILayout.Label("Last interval min: " + ConvertToMBString(memoryHistory[activeSecond].min)
+                + " max: " + ConvertToMBString(memoryHistory[activeSecond].max));
+            GUILayout.Label("Maximum reported: " + ConvertToMBString(maxMemory));
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
@@ -319,8 +321,10 @@ namespace GCMonitor
             if (colorfulMode)
                 timeScale = 10;
 
-            GUILayout.Label("Allocated: " + (Profiler.GetTotalAllocatedMemory() / 1024 / 1024).ToString("###") + "MB");
-            GUILayout.Label("Reserved: " + (Profiler.GetTotalReservedMemory() / 1024 / 1024).ToString("###") + "MB");
+            OnlyUpdateWhenDisplayed = GUILayout.Toggle(OnlyUpdateWhenDisplayed, "Only Update When Display is visible");
+
+            GUILayout.Label("Allocated: " + ConvertToMBString(Profiler.GetTotalAllocatedMemory()));
+            GUILayout.Label("Reserved: " + ConvertToMBString(Profiler.GetTotalReservedMemory()));
             GUILayout.EndHorizontal();
 
             GUILayout.Box(memoryTexture);
@@ -329,5 +333,14 @@ namespace GCMonitor
 
             GUI.DragWindow();
         }
+
+        static String ConvertToMBString(long bytes)
+        {
+            return (bytes / 1024 / 1024).ToString("###") + "MB";
+        }
+        static String ConvertToMBString(UInt64 bytes)
+        {
+            return (bytes / 1024 / 1024).ToString("###") + "MB";
+        }    
     }
 }
