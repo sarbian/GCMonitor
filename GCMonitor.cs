@@ -293,50 +293,67 @@ namespace GCMonitor
         {
             GUILayout.BeginVertical();
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Precision ", GUILayout.ExpandWidth(false));
-            // We could collect at x8 speed and then agreate
-            // for the asked display level. But lazy
-            if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
-            {
-                if (timeScale > 1)
-                {
-                    timeScale = timeScale / 2;
-                    memoryHistory = new memoryState[width];
-                    fullUpdate = true;
-                }
-            }
-            GUILayout.Label((1f / (float)timeScale).ToString("0.###") + "s", GUILayout.ExpandWidth(false));
-            if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
-            {
-                if (timeScale < 8)
-                {
-                    timeScale = timeScale * 2;
-                    memoryHistory = new memoryState[width];
-                    fullUpdate = true;
-                }
-            }
-            GUILayout.Space(30);
+                GUILayout.BeginHorizontal();
 
-            GUILayout.Label("Last interval min: " + ConvertToMBString(memoryHistory[activeSecond].min)
-                + " max: " + ConvertToMBString(memoryHistory[activeSecond].max)
-                + " GC : " + memoryHistory[previousActiveSecond].gc);
-            GUILayout.Label("Maximum reported: " + ConvertToMBString(maxMemory));
-            GUILayout.EndHorizontal();
+                    GUILayout.Label("Precision ", GUILayout.ExpandWidth(false));
+                    // We could collect at x8 speed and then agreate
+                    // for the asked display level. But lazy
+                    if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
+                    {
+                        if (timeScale > 1)
+                        {
+                            timeScale = timeScale / 2;
+                            memoryHistory = new memoryState[width];
+                            fullUpdate = true;
+                        }
+                    }
+                    GUILayout.Label((1f / (float)timeScale).ToString("0.###") + "s", GUILayout.ExpandWidth(false));
+                    if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
+                    {
+                        if (timeScale < 8)
+                        {
+                            timeScale = timeScale * 2;
+                            memoryHistory = new memoryState[width];
+                            fullUpdate = true;
+                        }
+                    }
+                    GUILayout.Space(30);
 
-            GUILayout.BeginHorizontal();
-            colorfulMode = GUILayout.Toggle(colorfulMode, "More Color Mode");
-            if (colorfulMode)
-                timeScale = 10;
+                    GUILayout.Label("Last interval min: " + ConvertToMBString(memoryHistory[activeSecond].min)
+                        + " max: " + ConvertToMBString(memoryHistory[activeSecond].max)
+                        + " GC : " + memoryHistory[previousActiveSecond].gc);
+                    GUILayout.Label("Maximum reported: " + ConvertToMBString(maxMemory));
+                GUILayout.EndHorizontal();
 
-            OnlyUpdateWhenDisplayed = GUILayout.Toggle(OnlyUpdateWhenDisplayed, "Only Update When Display is visible");
+                GUILayout.BeginHorizontal();
+                    colorfulMode = GUILayout.Toggle(colorfulMode, "More Color Mode");
+                    if (colorfulMode)
+                        timeScale = 10;
 
-            GUILayout.Label("Allocated: " + ConvertToMBString(Profiler.GetTotalAllocatedMemory()));
-            GUILayout.Label("Reserved: " + ConvertToMBString(Profiler.GetTotalReservedMemory()));
-            GUILayout.Label("FPS: " + (1 / Time.smoothDeltaTime).ToString("##"));
-            GUILayout.EndHorizontal();
+                    OnlyUpdateWhenDisplayed = GUILayout.Toggle(OnlyUpdateWhenDisplayed, "Only Update When Display is visible");
 
-            GUILayout.Box(memoryTexture);
+                    GUILayout.Label("Allocated: " + ConvertToMBString(Profiler.GetTotalAllocatedMemory()));
+                    GUILayout.Label("Reserved: " + ConvertToMBString(Profiler.GetTotalReservedMemory()));
+                    GUILayout.Label("FPS: " + (1 / Time.smoothDeltaTime).ToString("##"));
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal(GUILayout.Height(height));
+
+                    GUILayout.BeginVertical(GUILayout.MinWidth(50));
+
+                        const int MaxLabels = 4;
+                        const float labelSpace = 20f * (MaxLabels+1)/MaxLabels; //fraction because we add Space 1 less time than we draw a Label
+                        for (int i = 0; i <= MaxLabels; i++)
+                        {
+                            GUILayout.Label(ConvertToMBString(displayMaxMemory - displayMaxMemory * i/MaxLabels));
+                            if (i != MaxLabels) //only do it if it's not the last one
+                                GUILayout.Space(height / MaxLabels - labelSpace);
+                        }
+                    GUILayout.EndVertical();
+
+                    GUILayout.Box(memoryTexture);
+
+                GUILayout.EndHorizontal();
 
             GUILayout.EndVertical();
 
@@ -345,11 +362,11 @@ namespace GCMonitor
 
         static String ConvertToMBString(long bytes)
         {
-            return (bytes / 1024 / 1024).ToString("###") + "MB";
+            return (bytes / 1024 / 1024).ToString("##0") + "MB";
         }
         static String ConvertToMBString(UInt64 bytes)
         {
-            return (bytes / 1024 / 1024).ToString("###") + "MB";
+            return (bytes / 1024 / 1024).ToString("##0") + "MB";
         }    
     }
 }
