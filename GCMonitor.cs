@@ -38,6 +38,9 @@ namespace GCMonitor
         private const int width = 800;
         private const int height = 350;
 
+        const int GraphLabels = 4;
+        const float labelSpace = 20f * (GraphLabels + 1) / GraphLabels; //fraction because we add Space 1 less time than we draw a Label
+
         public Rect windowPos = new Rect(40, 40, 400, 200);
         public bool showUI = true;
         Texture2D memoryTexture = new Texture2D(width, height);
@@ -341,13 +344,11 @@ namespace GCMonitor
 
                     GUILayout.BeginVertical(GUILayout.MinWidth(50));
 
-                        const int MaxLabels = 4;
-                        const float labelSpace = 20f * (MaxLabels+1)/MaxLabels; //fraction because we add Space 1 less time than we draw a Label
-                        for (int i = 0; i <= MaxLabels; i++)
+                        for (int i = 0; i <= GraphLabels; i++)
                         {
-                            GUILayout.Label(ConvertToMBString(displayMaxMemory - displayMaxMemory * i/MaxLabels));
-                            if (i != MaxLabels) //only do it if it's not the last one
-                                GUILayout.Space(height / MaxLabels - labelSpace);
+                            GUILayout.Label(ConvertToMBString(displayMaxMemory - displayMaxMemory * i / GraphLabels));
+                            if (i != GraphLabels) //only do it if it's not the last one
+                                GUILayout.Space(height / GraphLabels - labelSpace);
                         }
                     GUILayout.EndVertical();
 
