@@ -63,6 +63,8 @@ namespace GCMonitor
         long maxMemory = 200;
         long lastMem = long.MaxValue;
 
+        int lastColCount = 0;
+
         Texture2D cat;
         Color[] catPixels;
         Color[] blackSquare;
@@ -167,7 +169,12 @@ namespace GCMonitor
                 memoryHistory[activeSecond].min = long.MaxValue;
                 memoryHistory[activeSecond].max = 0;
                 memoryHistory[activeSecond].avg = 0;
-                memoryHistory[activeSecond].gc = 0;
+
+                //int colCount = GC.CollectionCount(GC.MaxGeneration);
+                int colCount = GC.CollectionCount(0);
+
+                memoryHistory[previousActiveSecond].gc = colCount - lastColCount; // Should I check generation other than 0 ?
+                lastColCount = colCount;
                 displayUpToSecond = previousActiveSecond;
                 previousActiveSecond = activeSecond;
             }
@@ -312,7 +319,8 @@ namespace GCMonitor
             GUILayout.Space(30);
 
             GUILayout.Label("Last interval min: " + ConvertToMBString(memoryHistory[activeSecond].min)
-                + " max: " + ConvertToMBString(memoryHistory[activeSecond].max));
+                + " max: " + ConvertToMBString(memoryHistory[activeSecond].max)
+                + " GC : " + memoryHistory[previousActiveSecond].gc);
             GUILayout.Label("Maximum reported: " + ConvertToMBString(maxMemory));
             GUILayout.EndHorizontal();
 
@@ -325,6 +333,7 @@ namespace GCMonitor
 
             GUILayout.Label("Allocated: " + ConvertToMBString(Profiler.GetTotalAllocatedMemory()));
             GUILayout.Label("Reserved: " + ConvertToMBString(Profiler.GetTotalReservedMemory()));
+            GUILayout.Label("FPS: " + (1 / Time.smoothDeltaTime).ToString("##"));
             GUILayout.EndHorizontal();
 
             GUILayout.Box(memoryTexture);
