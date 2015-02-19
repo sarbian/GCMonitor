@@ -128,7 +128,7 @@ namespace GCMonitor
         private static extern UIntPtr getPeakRSS_Linux_x64();
 
         // OSX x86
-        private const string kDllPath_OSX_x86 = "GameData/GCMonitor/getRSS.so_OSX_x86";
+        private const string kDllPath_OSX_x86 = "GameData/GCMonitor/getRSS_OSX_x86.so";
         [DllImport(dllName: kDllPath_OSX_x86, EntryPoint = "getCurrentRSS")]
         private static extern UIntPtr getCurrentRSS_OSX_x86();
         [DllImport(dllName: kDllPath_OSX_x86, EntryPoint = "getPeakRSS")]
