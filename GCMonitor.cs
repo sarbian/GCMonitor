@@ -177,9 +177,9 @@ namespace GCMonitor
             spaceFormat.NumberGroupSeparator = " ";
 
             Debug.Log("[GCMonitor] Setting up getRSS delegates");
-            switch (Environment.OSVersion.Platform)
+            switch (Application.platform)
             {
-                case PlatformID.Unix:
+                case RuntimePlatform.LinuxPlayer:
                     if (IsX64())
                     {
                         getCurrentRSS = getCurrentRSS_Linux_x64;
@@ -191,11 +191,11 @@ namespace GCMonitor
                         getPeakRSS = getPeakRSS_Linux_x86;
                     }
                     break;
-                case PlatformID.MacOSX:
+                case RuntimePlatform.OSXPlayer:
                     getCurrentRSS = getCurrentRSS_OSX_x86;
                     getPeakRSS = getPeakRSS_OSX_x86;
                     break;
-                case PlatformID.Win32NT:
+                case RuntimePlatform.WindowsPlayer:
                     if (IsX64())
                     {
                         getCurrentRSS = getCurrentRSS_Win_x64;
@@ -429,6 +429,10 @@ namespace GCMonitor
 
         }
 
+
+        // TODO Convert texture display to GL.quads
+        // http://docs.unity3d.com/ScriptReference/GL.QUADS.html
+        // http://docs.unity3d.com/ScriptReference/GL.LoadPixelMatrix.html
 
         private void UpdateTexture(int last)
         {
