@@ -1,6 +1,6 @@
 {
     "NAME": "GCMonitor",
-    "URL": "https://ksp.sarbian.com/jenkins/job/GCMonitor/lastSuccessfulBuild/artifact/GCMonitor.version",
+    "URL": "https://ksp.sarbian.com/jenkins/job/GCMonitor/19/artifact/GCMonitor/GCMonitor.version",
     "DOWNLOAD": "http://forum.kerbalspaceprogram.com/threads/92907",
     "VERSION":{
         "MAJOR": @VERSION_MAJOR@,
