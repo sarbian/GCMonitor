@@ -28,6 +28,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using System.Threading;
+using KSP.IO;
 using Debug = UnityEngine.Debug;
 
 namespace GCMonitor
@@ -45,7 +46,7 @@ namespace GCMonitor
         private bool showUI = false;
         readonly Texture2D memoryTexture = new Texture2D(width, height);
         float ratio;
-        bool colorfulMode = false;
+        
 
         int timeScale = 1;
 
@@ -59,14 +60,31 @@ namespace GCMonitor
         int lastDisplayedSecond = 0;
 
         bool fullUpdate = true;
+        
+        [Persistent]
         bool OnlyUpdateWhenDisplayed = true;
+        [Persistent]
         bool memoryGizmo = true;
+        [Persistent]
         bool realMemory = true;
+        [Persistent]
         bool relative = false;
+        [Persistent]
+        bool colorfulMode = false;
+        [Persistent]
+        bool useAppLauncher = false;
+        [Persistent]
+        double warnPercent = 0.90d;
+        [Persistent]
+        double alertPercent = 0.95d;
+
+        private IButton tbButton;
+        private ApplicationLauncherButton alButton;
 
         long displayMaxMemory = 200;
         long displayMinMemory = 0;
         long maxMemory;
+        long topMemory;
 
         private readonly float updateInterval = 0.5F;
 
@@ -140,23 +158,31 @@ namespace GCMonitor
             return (UIntPtr)0;
         }
 
-        private delegate UIntPtr GetCurrentRSS();
-        private static GetCurrentRSS getCurrentRSS;
-        private delegate UIntPtr GetPeakRSS();
-        private static GetPeakRSS getPeakRSS;
-        private long warnMem;
-        private long alertMem;
-        private string memoryString;
-        private long memory;
+        public delegate UIntPtr GetCurrentRSS();
+        public static GetCurrentRSS getCurrentRSS;
+        public delegate UIntPtr GetPeakRSS();
+        public static GetPeakRSS getPeakRSS;
+        
+        public static long warnMem;
+        public static long alertMem;
+        public static string memoryString;
+        public static long memory;
 
         internal void Awake()
         {
             DontDestroyOnLoad(gameObject);
-            // I know. Should be ulong. User with TB of memory can file a bug
+
+            if (File.Exists<GCMonitor>("GCMonitor.cfg"))
+            {
+                ConfigNode config = ConfigNode.Load(IOUtils.GetFilePathFor(this.GetType(), "GCMonitor.cfg"));
+                ConfigNode.LoadObjectFromConfig(this, config);
+            }
+
+            // I know. Should be ulong. User with EB of memory can file a bug
             long maxAllowedMem = IsX64() ? long.MaxValue : uint.MaxValue;
 
-            warnMem = (long)(maxAllowedMem * 0.8d);
-            alertMem = (long)(maxAllowedMem * 0.9d);
+            warnMem = (long)(maxAllowedMem * warnPercent);
+            alertMem = (long)(maxAllowedMem * alertPercent);
 
             timeleft = updateInterval;
 
@@ -171,7 +197,6 @@ namespace GCMonitor
             blackSquare = new Color[32 * height];
             for (int i = 0; i < blackSquare.Length; i++)
                 blackSquare[i] = Color.black;
-
 
             spaceFormat = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
             spaceFormat.NumberGroupSeparator = " ";
@@ -226,7 +251,6 @@ namespace GCMonitor
                 getPeakRSS = unimplemented;
             }
 
-
             watch = new Stopwatch();
             watch.Start();
             // Does not exist on our mono version :(
@@ -234,17 +258,33 @@ namespace GCMonitor
             Thread threadGCCollector = new Thread(GCCollector);
             threadGCCollector.Start();
         }
+        
+        internal void OnDestroy()
+        {
+            killThread = true;
+
+            ConfigNode node = new ConfigNode("GCMonitor");
+            ConfigNode.CreateConfigFromObject(this, node);
+            node.Save(IOUtils.GetFilePathFor(this.GetType(), "GCMonitor.cfg"));
+        }
 
         private static bool IsX64()
         {
             return (IntPtr.Size == 8);
         }
 
-        internal void OnDestroy()
+        enum MemState
         {
-            killThread = true;
+            NORMAL,
+            WARNING,
+            ALERT1,
+            ALERT2
         }
 
+        private bool rmb;
+        private bool lmb;
+
+        private MemState activeMemState;
         public void Update()
         {
             timeleft -= Time.deltaTime;
@@ -265,12 +305,15 @@ namespace GCMonitor
             memory = (long)getCurrentRSS();
             memoryString = ConvertToMBString(memory);
 
+            lmb = lmb | Input.GetMouseButtonDown(0);
+            rmb = rmb | Input.GetMouseButtonDown(1);
+
+            UpdateButton();
 
             if (GameSettings.MODIFIER_KEY.GetKey() && Input.GetKeyDown(KeyCode.F1))
             {
                 showUI = !showUI;
             }
-
 
             if (GameSettings.MODIFIER_KEY.GetKey() && Input.GetKeyDown(KeyCode.F))
             {
@@ -343,12 +386,136 @@ namespace GCMonitor
                 {
                     while (lastDisplayedSecond != localdisplayUpToSecond)
                     {
-                        UpdateTexture(lastDisplayedSecond, localdisplayUpToSecond);
                         lastDisplayedSecond = (lastDisplayedSecond + 1) % width;
+                        UpdateTexture(lastDisplayedSecond, localdisplayUpToSecond);
+                        
                     }
                     memoryTexture.Apply();
                 }
             }
+        }
+
+        private void UpdateButton()
+        {
+
+            MemState state;
+
+            if (memory < warnMem)
+            {
+                state = MemState.NORMAL;
+            }
+            else if (memory < alertMem)
+            {
+                state = MemState.WARNING;
+            }
+            else
+            {
+                if (Mathf.FloorToInt(Time.realtimeSinceStartup) % 2 == 0)
+                {
+                    state = MemState.ALERT1;
+                }
+                else
+                {
+                    state = MemState.ALERT2;
+                }
+            }
+
+            if (tbButton == null && ToolbarManager.ToolbarAvailable)
+            {
+                print("Toolbar config");
+                tbButton = ToolbarManager.Instance.add("GCMonitor", "GCMonitor");
+                tbButton.ToolTip = "GCMonitor";
+                tbButton.TexturePath = "GCMonitor/GCMonitor24N";
+                tbButton.OnClick += tbButtonClick;
+                tbButton.Visible = true;
+            }
+
+            if (useAppLauncher && alButton == null && ApplicationLauncher.Ready)
+            {
+                print("Launcher config");
+
+                Texture2D buttonTexture = GameDatabase.Instance.GetTexture("GCMonitor/GCMonitor38N", false);
+
+                alButton = ApplicationLauncher.Instance.AddModApplication(
+                    alButtonClick, alButtonClick,
+                    alHover, alHover,
+                    null, null,
+                    ApplicationLauncher.AppScenes.ALWAYS,
+                    buttonTexture);
+            }
+
+            if (!useAppLauncher && alButton != null)
+            {
+                ApplicationLauncher.Instance.RemoveApplication(alButton);
+            }
+
+            if (tbButton != null)
+            {
+                tbButton.ToolTip = memoryString;
+            }
+
+            if (state == activeMemState)
+                return;
+
+            activeMemState = state;
+
+            switch (state)
+            {
+                case MemState.NORMAL:
+                    updateLauncher("GCMonitor/GCMonitor38N");
+                    updateToolBar("GCMonitor/GCMonitor24N");
+                    break;
+                case MemState.WARNING:
+                    updateLauncher("GCMonitor/GCMonitor38W");
+                    updateToolBar("GCMonitor/GCMonitor24W");
+                    break;
+                case MemState.ALERT1:
+                    updateLauncher("GCMonitor/GCMonitor38A1");
+                    updateToolBar("GCMonitor/GCMonitor24A1");
+                    break;
+                case MemState.ALERT2:
+                    updateLauncher("GCMonitor/GCMonitor38A2");
+                    updateToolBar("GCMonitor/GCMonitor24A2");
+                    break;
+            }
+        }
+
+        private void tbButtonClick(ClickEvent e)
+        {
+            if (e.MouseButton == 0)
+                memoryGizmo = !memoryGizmo;
+            if (e.MouseButton == 1)
+                showUI = !showUI;
+        }
+
+        private void alHover()
+        {
+            lmb = false;
+            rmb = false;
+        }
+
+        private void alButtonClick()
+        {
+            if (lmb)
+                memoryGizmo = !memoryGizmo;
+            if (rmb)
+                showUI = !showUI;
+        }
+
+        private void updateToolBar(string texture)
+        {
+            if (tbButton == null)
+                return;
+            tbButton.TexturePath = texture;
+        }
+
+        private void updateLauncher(string texture)
+        {
+            if (alButton == null)
+                return;
+
+            Texture2D buttonTexture = GameDatabase.Instance.GetTexture(texture, false);
+            alButton.SetTexture(buttonTexture);
         }
 
         public void memoryHistoryUpdate()
@@ -575,18 +742,34 @@ namespace GCMonitor
             OnlyUpdateWhenDisplayed = GUILayout.Toggle(OnlyUpdateWhenDisplayed, "Only Update When Display is visible", GUILayout.ExpandWidth(false));
 
             memoryGizmo = GUILayout.Toggle(memoryGizmo, "Display KSP memory and FPS", GUILayout.ExpandWidth(false));
+
+            useAppLauncher = GUILayout.Toggle(useAppLauncher, "Display Launcher Icon", GUILayout.ExpandWidth(false));
             
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
 
             GUILayout.Label("KSP: " + ConvertToKBString((long)getCurrentRSS()) + " / " + ConvertToKBString((long)getPeakRSS()), GUILayout.ExpandWidth(false));
+            
+            GUILayout.Space(20);
+            
             GUILayout.Label(
                 "Mono allocated:" + ConvertToMBString(Profiler.GetTotalAllocatedMemory())
                 + " min: " + ConvertToMBString(memoryHistory[activeSecond].min)
                 + " max: " + ConvertToMBString(memoryHistory[activeSecond].max)
                 + " GC : " + memoryHistory[previousActiveSecond].gc.ToString(), GUILayout.ExpandWidth(false));
-
+            
+            GUILayout.Space(20);
+            
             GUILayout.Label("FPS: " + fps.ToString("0.0"), GUILayout.ExpandWidth(false));
+
+            GUILayout.Space(20);
+
+            if (GUILayout.Button("Top", GUILayout.ExpandWidth(false)))
+            {
+                topMemory = memory;
+            }
+
+            GUILayout.Label("Since top: " + (topMemory != 0 ? ConvertToKBString(memory - topMemory) : "0"));
 
             GUILayout.EndHorizontal();
 
@@ -613,6 +796,12 @@ namespace GCMonitor
             GUI.DragWindow();
         }
 
+
+        static String ConvertToGBString(long bytes)
+        {
+            return ((bytes >> 20) / 1024f).ToString("00.0", spaceFormat);
+        }
+
         static String ConvertToMBString(long bytes)
         {
             return (bytes >> 20).ToString("#,0", spaceFormat) + " MB";
@@ -627,12 +816,12 @@ namespace GCMonitor
         {
             Color backup = style.normal.textColor;
             style.normal.textColor = outColor;
-            int i;
-            for (i = -strength; i <= strength; i++)
+            for (int i = -strength; i <= strength; i++)
             {
                 GUI.Label(new Rect(r.x - strength, r.y + i, r.width, r.height), t, style);
                 GUI.Label(new Rect(r.x + strength, r.y + i, r.width, r.height), t, style);
-            } for (i = -strength + 1; i <= strength - 1; i++)
+            } 
+            for (int i = -strength + 1; i <= strength - 1; i++)
             {
                 GUI.Label(new Rect(r.x + i, r.y - strength, r.width, r.height), t, style);
                 GUI.Label(new Rect(r.x + i, r.y + strength, r.width, r.height), t, style);
@@ -640,6 +829,11 @@ namespace GCMonitor
             style.normal.textColor = inColor;
             GUI.Label(r, t, style);
             style.normal.textColor = backup;
+        }
+
+        public new static void print(object message)
+        {
+            MonoBehaviour.print("[GCMonitor] " + message.ToString());
         }
  
     }
