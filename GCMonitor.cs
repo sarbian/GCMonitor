@@ -86,11 +86,11 @@ namespace GCMonitor
         long maxMemory;
         long topMemory;
 
-        private readonly float updateInterval = 0.5F;
+        private readonly float updateInterval = 4;
 
-        private float accum = 0; // FPS accumulated over the interval
-        private int frames = 0; // Frames drawn over the interval
-        private float timeleft; // Left time for current interval
+        private float dt = 0;
+        private int frameCount = 0;
+        private float updateRate;
         private float fps;
         private string fpsString = string.Empty;
 
@@ -184,7 +184,7 @@ namespace GCMonitor
             warnMem = (long)(maxAllowedMem * warnPercent);
             alertMem = (long)(maxAllowedMem * alertPercent);
 
-            timeleft = updateInterval;
+            updateRate = updateInterval;
 
             line = new Color[height];
             blackLine = new Color[height];
@@ -287,19 +287,16 @@ namespace GCMonitor
         private MemState activeMemState;
         public void Update()
         {
-            timeleft -= Time.deltaTime;
-            accum += Time.timeScale / Time.deltaTime;
-            frames++;
+            frameCount++;
+            //dt += Time.timeScale / Time.deltaTime;
+            dt += Time.deltaTime;
 
-            // Interval ended - update fps and start new interval
-            if (timeleft <= 0.0)
+            if (dt > 1.0f / updateRate)
             {
-                fps = accum / frames;
+                fps = frameCount / dt;
                 fpsString = fps.ToString("##0.0") + " FPS";
-                
-                timeleft = updateInterval;
-                accum = 0.0F;
-                frames = 0;
+                frameCount = 0;
+                dt -= 1.0f / updateRate;
             }
 
             memory = (long)getCurrentRSS();
