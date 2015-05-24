@@ -43,10 +43,15 @@ namespace GCMonitor
         const float labelSpace = 20f * (GraphLabels + 1) / GraphLabels; //fraction because we add Space 1 less time than we draw a Label
 
         private Rect windowPos = new Rect(80, 80, 400, 200);
+        private Rect windowConfigPos = new Rect(80 + 410, 80, 200, 100);
+        private Rect fpsPos = new Rect(10, 200, 80, 50);
         private bool showUI = false;
+        private bool showConfUI = false;
+
         readonly Texture2D memoryTexture = new Texture2D(width, height);
         float ratio;
-        
+
+        private GUIStyle fpsLabelStyle;
 
         int timeScale = 1;
 
@@ -77,6 +82,19 @@ namespace GCMonitor
         double warnPercent = 0.90d;
         [Persistent]
         double alertPercent = 0.95d;
+
+        [Persistent]
+        int fpsSize = 10;
+
+        [Persistent]
+        bool displayMem = true;
+        [Persistent]
+        bool displayFps = true;
+
+        [Persistent]
+        float fpsX = 10;
+        [Persistent]
+        float fpsY = 200;
 
         private IButton tbButton;
         private ApplicationLauncherButton alButton;
@@ -177,6 +195,8 @@ namespace GCMonitor
                 ConfigNode config = ConfigNode.Load(IOUtils.GetFilePathFor(this.GetType(), "GCMonitor.cfg"));
                 ConfigNode.LoadObjectFromConfig(this, config);
             }
+
+            fpsPos.Set(fpsX, fpsY, 200, 50);
 
             // I know. Should be ulong. User with EB of memory can file a bug
             long maxAllowedMem = IsX64() ? long.MaxValue : uint.MaxValue;
@@ -673,16 +693,38 @@ namespace GCMonitor
         {
             if (memoryGizmo)
             {
-                Vector2 size = GUI.skin.label.CalcSize(new GUIContent(memoryString));
+                if (fpsLabelStyle == null)
+                    fpsLabelStyle = new GUIStyle(GUI.skin.label);
 
-                DrawOutline(new Rect(10, 100, 200, size.y), memoryString, 1, GUI.skin.label, Color.black, memory > alertMem ? Color.red : memory > warnMem ? XKCDColors.Orange : Color.white);
-                DrawOutline(new Rect(10, 100 + size.y, 200, size.y), fpsString, 1, GUI.skin.label, Color.black, Color.white);
+                fpsLabelStyle.fontSize = fpsSize;
+
+                Vector2 size = fpsLabelStyle.CalcSize(new GUIContent(memoryString));
+
+                fpsX = Mathf.Clamp(fpsX, 0, Screen.width);
+                fpsY = Mathf.Clamp(fpsY, 0, Screen.height);
+
+                fpsPos.Set(fpsX, fpsY, 200, size.y);
+                if (displayFps)
+                {
+                    DrawOutline(fpsPos, memoryString, 1, fpsLabelStyle, Color.black,
+                        memory > alertMem ? Color.red : memory > warnMem ? XKCDColors.Orange : Color.white);
+                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 200, size.y);
+                }
+                if (displayMem)
+                {
+                    DrawOutline(fpsPos, fpsString, 1, fpsLabelStyle, Color.black, Color.white);
+                }
             }
-
 
             if (showUI)
             {
                 windowPos = GUILayout.Window(8785478, windowPos, WindowGUI, "GCMonitor", GUILayout.Width(420), GUILayout.Height(220));
+            }
+
+            if (showConfUI & showUI)
+            {
+                windowConfigPos.Set(windowPos.xMax  + 10, windowPos.yMin, windowConfigPos.width, windowConfigPos.height);
+                windowConfigPos = GUILayout.Window(8785479, windowConfigPos, WindowConfigGUI, "Config", GUILayout.Width(80), GUILayout.Height(50));
             }
         }
 
@@ -737,10 +779,6 @@ namespace GCMonitor
                 fullUpdate = true;
 
             OnlyUpdateWhenDisplayed = GUILayout.Toggle(OnlyUpdateWhenDisplayed, "Only Update When Display is visible", GUILayout.ExpandWidth(false));
-
-            memoryGizmo = GUILayout.Toggle(memoryGizmo, "Display KSP memory and FPS", GUILayout.ExpandWidth(false));
-
-            useAppLauncher = GUILayout.Toggle(useAppLauncher, "Display Launcher Icon", GUILayout.ExpandWidth(false));
             
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
@@ -766,7 +804,13 @@ namespace GCMonitor
                 topMemory = memory;
             }
 
-            GUILayout.Label("Since top: " + (topMemory != 0 ? ConvertToKBString(memory - topMemory) : "0"));
+            GUILayout.Label("Since top: " + (topMemory != 0 ? ConvertToKBString(memory - topMemory) : "0"), GUILayout.ExpandWidth(true));
+
+
+            GUILayout.Space(20);
+
+            if (GUILayout.Button("Config"))
+                showConfUI = !showConfUI;
 
             GUILayout.EndHorizontal();
 
@@ -793,6 +837,51 @@ namespace GCMonitor
             GUI.DragWindow();
         }
 
+        public void WindowConfigGUI(int windowID)
+        {
+            GUILayout.BeginVertical();
+
+            useAppLauncher = GUILayout.Toggle(useAppLauncher, "Display Launcher Icon", GUILayout.ExpandWidth(false));
+            memoryGizmo = GUILayout.Toggle(memoryGizmo, "Display KSP memory and FPS", GUILayout.ExpandWidth(false));
+
+            GUILayout.BeginHorizontal();
+            displayFps = GUILayout.Toggle(displayFps, "FPS");
+            displayMem = GUILayout.Toggle(displayMem, "Memory");
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Size", GUILayout.Width(40));
+            if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
+                fpsSize--;
+            GUILayout.Label(fpsSize.ToString(), GUILayout.Width(40));
+            if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
+                fpsSize++;
+            GUILayout.EndHorizontal();
+            
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("X", GUILayout.Width(40));
+            if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
+                fpsX = fpsX - 5;
+            GUILayout.Label(fpsPos.xMin.ToString("F0"), GUILayout.Width(40));
+            if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
+                fpsX = fpsX + 5;
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Y", GUILayout.Width(40));
+            if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
+                fpsY = fpsY - 5;
+            GUILayout.Label(fpsPos.yMin.ToString("F0"), GUILayout.Width(40));
+            if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
+                fpsY = fpsY + 5;
+            GUILayout.EndHorizontal();
+            
+            GUILayout.EndVertical();
+
+            fpsX = Mathf.Clamp(fpsX, 0, Screen.width);
+            fpsY = Mathf.Clamp(fpsY, 0, Screen.height);
+
+        }
 
         static String ConvertToGBString(long bytes)
         {
