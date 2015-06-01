@@ -704,13 +704,13 @@ namespace GCMonitor
                 fpsY = Mathf.Clamp(fpsY, 0, Screen.height);
 
                 fpsPos.Set(fpsX, fpsY, 200, size.y);
-                if (displayFps)
+                if (displayMem)
                 {
                     DrawOutline(fpsPos, memoryString, 1, fpsLabelStyle, Color.black,
                         memory > alertMem ? Color.red : memory > warnMem ? XKCDColors.Orange : Color.white);
                     fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 200, size.y);
                 }
-                if (displayMem)
+                if (displayFps)
                 {
                     DrawOutline(fpsPos, fpsString, 1, fpsLabelStyle, Color.black, Color.white);
                 }
