@@ -349,12 +349,6 @@ namespace GCMonitor
                 memoryGizmo = !memoryGizmo;
             }
 
-            if (GameSettings.MODIFIER_KEY.GetKey() && Input.GetKeyDown(KeyCode.M))
-            {
-                Texture2D t = new Texture2D(5120, 5120, TextureFormat.ARGB32, false);
-                t.Apply();
-            }
-
             if (!showUI)
                 return;
 
