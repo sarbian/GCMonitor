@@ -49,6 +49,8 @@ namespace GCMonitor
         private bool showUI = false;
         private bool showConfUI = false;
 
+        private bool hiddenUI = false;
+
         readonly Texture2D memoryTexture = new Texture2D(width, height);
         float ratio;
 
@@ -202,7 +204,7 @@ namespace GCMonitor
             }
 
             fpsPos.Set(fpsX, fpsY, 200, 50);
-            
+
             updateRate = updateInterval;
 
             line = new Color[height];
@@ -283,6 +285,10 @@ namespace GCMonitor
             warnMem = (long)(maxAllowedMem * warnPercent);
             alertMem = (long)(maxAllowedMem * alertPercent);
 
+
+            GameEvents.onShowUI.Add(ShowGUI);
+            GameEvents.onHideUI.Add(HideGUI);
+
             watch = new Stopwatch();
             watch.Start();
             // Does not exist on our mono version :(
@@ -294,6 +300,9 @@ namespace GCMonitor
         internal void OnDestroy()
         {
             killThread = true;
+
+            GameEvents.onShowUI.Remove(ShowGUI);
+            GameEvents.onHideUI.Remove(HideGUI);
 
             ConfigNode node = new ConfigNode("GCMonitor");
             ConfigNode.CreateConfigFromObject(this, node);
@@ -578,6 +587,14 @@ namespace GCMonitor
             memoryHistory[activeSecond].rss = (long)getCurrentVM();
         }
 
+        private void ShowGUI()
+        {
+            hiddenUI = false;
+        }
+        private void HideGUI()
+        {
+            hiddenUI = true;
+        }
 
         private void GCCollector()
         {
@@ -703,7 +720,7 @@ namespace GCMonitor
 
         public void OnGUI()
         {
-            if (memoryGizmo)
+            if (memoryGizmo && !hiddenUI)
             {
                 if (fpsLabelStyle == null)
                     fpsLabelStyle = new GUIStyle(GUI.skin.label);
@@ -728,14 +745,14 @@ namespace GCMonitor
                 }
             }
 
-            if (showUI)
+            if (showUI && !hiddenUI)
             {
                 windowPos = GUILayout.Window(8785478, windowPos, WindowGUI, "GCMonitor", GUILayout.Width(420), GUILayout.Height(220));
             }
 
-            if (showConfUI & showUI)
+            if (showConfUI & showUI && !hiddenUI)
             {
-                windowConfigPos.Set(windowPos.xMax  + 10, windowPos.yMin, windowConfigPos.width, windowConfigPos.height);
+                windowConfigPos.Set(windowPos.xMax + 10, windowPos.yMin, windowConfigPos.width, windowConfigPos.height);
                 windowConfigPos = GUILayout.Window(8785479, windowConfigPos, WindowConfigGUI, "Config", GUILayout.Width(80), GUILayout.Height(50));
             }
         }
