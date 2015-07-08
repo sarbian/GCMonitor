@@ -274,7 +274,7 @@ namespace GCMonitor
             // I know. Should be ulong. User with EB of memory can file a bug
             long maxAllowedMem = IsX64() ? long.MaxValue : uint.MaxValue;
 
-            if ((long)getMaximumVM() != 0)
+            if (Application.platform == RuntimePlatform.WindowsPlayer && (long)getMaximumVM() != 0)
             {
                 maxAllowedMem = (long)getMaximumVM();
                 Debug.Log("[GCMonitor] Maximum usable memory " + ConvertToGBString(maxAllowedMem) + " / " + ConvertToMBString(maxAllowedMem));
