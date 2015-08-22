@@ -134,24 +134,65 @@ namespace GCMonitor
             public long min;
             public long max;
             // technically it should be an ulong but it generate too many cast requirement
-            public long rss;
+            public ulong rss;
             public long gc;
         }
 
-        // Windows x86
-        private const string kDllPath_Win_x86 = "GameData/GCMonitor/getRSS_x86.dll";
-        [DllImport(dllName: kDllPath_Win_x86, EntryPoint = "getCurrentVM")]
-        private static extern UIntPtr getCurrentVM_Win_x86();
-        [DllImport(dllName: kDllPath_Win_x86, EntryPoint = "getMaximumVM")]
-        private static extern UIntPtr getMaximumVM_Win_x86();
+        struct processMemory
+        {
+            public ulong vsz;
+            public ulong max;
 
-        // Windows x64
-        private const string kDllPath_Win_x64 = "GameData/GCMonitor/getRSS_x64.dll";
-        [DllImport(dllName: kDllPath_Win_x64, EntryPoint = "getCurrentVM")]
-        private static extern UIntPtr getCurrentVM_Win_x64();
-        [DllImport(dllName: kDllPath_Win_x64, EntryPoint = "getMaximumVM")]
-        private static extern UIntPtr getMaximumVM_Win_x64();
+            public processMemory(ulong vsz, ulong max)
+            {
+                this.vsz = vsz;
+                this.max = max;
+            }
+        }
 
+        //// Windows x86
+        //private const string kDllPath_Win_x86 = "GameData/GCMonitor/getRSS_x86.dll";
+        //[DllImport(dllName: kDllPath_Win_x86, EntryPoint = "getCurrentVM")]
+        //private static extern UIntPtr getCurrentVM_Win_x86();
+        //[DllImport(dllName: kDllPath_Win_x86, EntryPoint = "getMaximumVM")]
+        //private static extern UIntPtr getMaximumVM_Win_x86();
+        //
+        //// Windows x64
+        //private const string kDllPath_Win_x64 = "GameData/GCMonitor/getRSS_x64.dll";
+        //[DllImport(dllName: kDllPath_Win_x64, EntryPoint = "getCurrentVM")]
+        //private static extern UIntPtr getCurrentVM_Win_x64();
+        //[DllImport(dllName: kDllPath_Win_x64, EntryPoint = "getMaximumVM")]
+        //private static extern UIntPtr getMaximumVM_Win_x64();
+        
+        [return: MarshalAs(UnmanagedType.Bool)]
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer); // use of [In, Out] is voluntary. see http://www.pinvoke.net/default.aspx/kernel32/GlobalMemoryStatusEx.html
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private class MEMORYSTATUSEX
+        {
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+            public MEMORYSTATUSEX()
+            {
+                this.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+            }
+        }
+
+        private static MEMORYSTATUSEX msex;
+
+        private static processMemory getProcessMemoryWin()
+        {
+            GlobalMemoryStatusEx(msex);
+            return new processMemory(msex.ullTotalVirtual - msex.ullAvailVirtual, msex.ullTotalVirtual);
+        }
 
         // Current Linux and OSX still use the RSS. I'll have th check if it is the 
         // right value for those (pretty sure it is not for Linux)
@@ -163,12 +204,22 @@ namespace GCMonitor
         [DllImport(dllName: kDllPath_linux_x86, EntryPoint = "getPeakRSS")]
         private static extern UIntPtr getPeakRSS_Linux_x86();
 
+        private static processMemory getProcessMemoryLinux_x86()
+        {
+            return new processMemory((ulong)getCurrentRSS_Linux_x86(), (ulong)getPeakRSS_Linux_x86());
+        }
+
         // Linux x64
         private const string kDllPath_linux_x64 = "GameData/GCMonitor/getRSS_x64.so";
         [DllImport(dllName: kDllPath_linux_x64, EntryPoint = "getCurrentRSS")]
         private static extern UIntPtr getCurrentRSS_Linux_x64();
         [DllImport(dllName: kDllPath_linux_x64, EntryPoint = "getPeakRSS")]
         private static extern UIntPtr getPeakRSS_Linux_x64();
+        
+        private static processMemory getProcessMemoryLinux_x64()
+        {
+            return new processMemory((ulong)getCurrentRSS_Linux_x64(), (ulong)getPeakRSS_Linux_x64());
+        }
 
         // OSX x86
         private const string kDllPath_OSX_x86 = "GameData/GCMonitor/getRSS_OSX_x86.so";
@@ -177,21 +228,81 @@ namespace GCMonitor
         [DllImport(dllName: kDllPath_OSX_x86, EntryPoint = "getPeakRSS")]
         private static extern UIntPtr getPeakRSS_OSX_x86();
 
-
-        private static UIntPtr unimplemented()
+        private struct time_value
         {
-            return (UIntPtr)0;
+            public int seconds;
+            public int microseconds;
         }
 
-        public delegate UIntPtr GetCurrentVM();
-        public static GetCurrentVM getCurrentVM;
-        public delegate UIntPtr GetMaximumVM();
-        public static GetMaximumVM getMaximumVM;
+        private struct task_basic_info
+        {
+            public int suspend_count;
+            public IntPtr virtual_size;
+            public IntPtr resident_size;
+            public time_value user_time;
+            public time_value system_time;
+            public int policy;
+        }
 
-        public static long warnMem;
-        public static long alertMem;
+        //struct task_basic_info_64
+        //{
+        //    integer_t suspend_count;  /* suspend count for task */
+        //    mach_vm_size_t virtual_size;   /* virtual memory size (bytes) */
+        //    mach_vm_size_t resident_size;  /* resident memory size (bytes) */
+        //    time_value_t user_time;      /* total user run time for
+        //                                   terminated threads */
+        //    time_value_t system_time;    /* total system run time for
+        //                                   terminated threads */
+        //    policy_t policy;        /* default policy for new threads */
+        //};
+
+        private enum task_flavor_t
+        {
+            TASK_BASIC_INFO_32 = 4,
+            TASK_BASIC_INFO_64 = 5,
+            TASK_BASIC2_INFO_32 = 6
+        }
+
+        [DllImport("libc.dylib")]
+        private static extern IntPtr mach_task_self();
+
+        [DllImport("libc.dylib")]
+        //private static extern int task_info(IntPtr task, task_flavor_t flavor, IntPtr taskInfoStructure, ref int structureLength);
+        private static extern int task_info(IntPtr task, task_flavor_t flavor, IntPtr taskInfoStructure, ref int structureLength);
+
+        private static unsafe processMemory getProcessMemoryLinux_OSX()
+        {
+            var result = new task_basic_info();
+            int structureLength = Marshal.SizeOf(typeof(task_basic_info)) / IntPtr.Size;
+
+            task_info(mach_task_self(), task_flavor_t.TASK_BASIC_INFO_32, new IntPtr(&result), ref structureLength);
+
+
+            return new processMemory((ulong)result.virtual_size >> 20, (ulong)result.virtual_size >> 20);
+        }
+
+        //private static UIntPtr unimplemented()
+        //{
+        //    return (UIntPtr)0;
+        //}
+
+        //public delegate UIntPtr GetCurrentVM();
+        //public static GetCurrentVM getCurrentVM;
+        //public delegate UIntPtr GetMaximumVM();
+        //public static GetMaximumVM getMaximumVM;
+
+        public static ulong warnMem;
+        public static ulong alertMem;
         public static string memoryString;
-        public static long memory;
+        public static ulong memory;
+
+        private static processMemory getProcessMemory_unimplemented()
+        {
+            return new processMemory(0, 0);
+        }
+
+        private delegate processMemory GetProcessMemory();
+        private GetProcessMemory getProcessMemory;
 
         internal void Awake()
         {
@@ -229,61 +340,49 @@ namespace GCMonitor
                 case RuntimePlatform.LinuxPlayer:
                     if (IsX64())
                     {
-                        getCurrentVM = getCurrentRSS_Linux_x64;
-                        getMaximumVM = getPeakRSS_Linux_x64;
+                        getProcessMemory = getProcessMemoryLinux_x64;
                     }
                     else
                     {
-                        getCurrentVM = getCurrentRSS_Linux_x86;
-                        getMaximumVM = getPeakRSS_Linux_x86;
+                        getProcessMemory = getProcessMemoryLinux_x86;
                     }
                     break;
                 case RuntimePlatform.OSXPlayer:
-                    getCurrentVM = getCurrentRSS_OSX_x86;
-                    getMaximumVM = getPeakRSS_OSX_x86;
+                    getProcessMemory = getProcessMemoryLinux_OSX;
                     break;
                 case RuntimePlatform.WindowsPlayer:
-                    if (IsX64())
-                    {
-                        getCurrentVM = getCurrentVM_Win_x64;
-                        getMaximumVM = getMaximumVM_Win_x64;
-                    }
-                    else
-                    {
-                        getCurrentVM = getCurrentVM_Win_x86;
-                        getMaximumVM = getMaximumVM_Win_x86;
-                    }
+                    msex = new MEMORYSTATUSEX();
+                    getProcessMemory = getProcessMemoryWin;
                     break;
                 default:
-                    getCurrentVM = unimplemented;
-                    getMaximumVM = unimplemented;
+                    getProcessMemory = getProcessMemory_unimplemented;
                     break;
             }
 
             try
             {
-                UIntPtr c = getCurrentVM();
-                UIntPtr p = getMaximumVM();
-                Debug.Log("[GCMonitor] Delegates OK " + ConvertToMBString((long)c) + " / " + ConvertToMBString((long)p));
+                GlobalMemoryStatusEx(msex);
+
+                processMemory p = getProcessMemory();
+
+                Debug.Log("[GCMonitor] Delegates OK " + ConvertToMBString(p.vsz) + " / " + ConvertToMBString(p.max));
             }
             catch (Exception e)
             {
                 Debug.Log("[GCMonitor] Unable to find getRSS implementation\n" + e.ToString());
-                getCurrentVM = unimplemented;
-                getMaximumVM = unimplemented;
+                getProcessMemory = getProcessMemory_unimplemented;
             }
 
-            // I know. Should be ulong. User with EB of memory can file a bug
-            long maxAllowedMem = IsX64() ? long.MaxValue : uint.MaxValue;
+            ulong maxAllowedMem = IsX64() ? ulong.MaxValue : uint.MaxValue;
 
-            if (Application.platform == RuntimePlatform.WindowsPlayer && (long)getMaximumVM() != 0)
+            if (Application.platform == RuntimePlatform.WindowsPlayer && getProcessMemory().max != 0)
             {
-                maxAllowedMem = (long)getMaximumVM();
+                maxAllowedMem = getProcessMemory().max;
                 Debug.Log("[GCMonitor] Maximum usable memory " + ConvertToGBString(maxAllowedMem) + " / " + ConvertToMBString(maxAllowedMem));
             }
 
-            warnMem = (long)(maxAllowedMem * warnPercent);
-            alertMem = (long)(maxAllowedMem * alertPercent);
+            warnMem = (ulong)(maxAllowedMem * warnPercent);
+            alertMem = (ulong)(maxAllowedMem * alertPercent);
 
 
             GameEvents.onShowUI.Add(ShowGUI);
@@ -340,7 +439,7 @@ namespace GCMonitor
                 dt -= 1.0f / updateRate;
             }
 
-            memory = (long)getCurrentVM();
+            memory = getProcessMemory().vsz;
             memoryString = ConvertToMBString(memory);
 
             lmb = lmb | Input.GetMouseButtonDown(0);
@@ -361,8 +460,8 @@ namespace GCMonitor
             if (!showUI)
                 return;
 
-            long newdisplayMaxMemory = displayMaxMemory;
-            long newdisplayMinMemory = displayMinMemory;
+            long newdisplayMaxMemory = (long) displayMaxMemory;
+            long newdisplayMinMemory = (long) displayMinMemory;
 
             if (fullUpdate)
             {
@@ -373,11 +472,11 @@ namespace GCMonitor
             long minMemory = 0;
             for (int i = 0; i < memoryHistory.Length; i++)
             {
-                long mem = realMemory ? memoryHistory[i].rss : memoryHistory[i].max;
+                long mem = realMemory ? (long)memoryHistory[i].rss : memoryHistory[i].max;
                 if (relative)
                 {
                     int index = i != 0 ? (i - 1) : memoryHistory.Length - 1;
-                    long pmem = realMemory ? memoryHistory[index].rss : memoryHistory[index].max;
+                    long pmem = realMemory ? (long)memoryHistory[index].rss : memoryHistory[index].max;
                     mem = pmem == 0 ? 0 : mem - pmem;
                 }
                 if (mem > maxMemory)
@@ -584,7 +683,7 @@ namespace GCMonitor
             if (mem > memoryHistory[activeSecond].max)
                 memoryHistory[activeSecond].max = mem;
 
-            memoryHistory[activeSecond].rss = (long)getCurrentVM();
+            memoryHistory[activeSecond].rss = getProcessMemory().vsz;
         }
 
         private void ShowGUI()
@@ -658,14 +757,14 @@ namespace GCMonitor
 
         private void UpdateTexture(int x, int last)
         {
-            int min = Mathf.RoundToInt(ratio * (realMemory ? memoryHistory[x].rss : memoryHistory[x].min));
-            int max = Mathf.RoundToInt(ratio * (realMemory ? memoryHistory[x].rss : memoryHistory[x].max));
+            int min = Mathf.RoundToInt(ratio * (realMemory ? (long)memoryHistory[x].rss : memoryHistory[x].min));
+            int max = Mathf.RoundToInt(ratio * (realMemory ? (long)memoryHistory[x].rss : memoryHistory[x].max));
 
             int zero = -Mathf.RoundToInt(ratio * displayMinMemory);
             if (relative)
             {
                 int index = x != 0 ? (x - 1) : memoryHistory.Length - 1;
-                int pmem = Mathf.RoundToInt(ratio * (realMemory ? memoryHistory[index].rss : memoryHistory[index].max));
+                int pmem = Mathf.RoundToInt(ratio * (realMemory ? memoryHistory[index].rss : (ulong)memoryHistory[index].max));
                 max = pmem == 0 ? 0 : max - pmem;
                 max = max + zero;
             }
@@ -812,7 +911,9 @@ namespace GCMonitor
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
 
-            GUILayout.Label("KSP: " + ConvertToKBString((long)getCurrentVM()) + " / " + ConvertToKBString((long)getMaximumVM()), GUILayout.ExpandWidth(false));
+            processMemory mem = getProcessMemory();
+
+            GUILayout.Label("KSP: " + ConvertToKBString(mem.vsz) + " / " + ConvertToKBString(mem.max), GUILayout.ExpandWidth(false));
 
             GUILayout.Space(20);
 
@@ -830,10 +931,10 @@ namespace GCMonitor
 
             if (GUILayout.Button("Top", GUILayout.ExpandWidth(false)))
             {
-                topMemory = memory;
+                topMemory = (long) memory;
             }
 
-            GUILayout.Label("Since top: " + (topMemory != 0 ? ConvertToKBString(memory - topMemory) : "0"), GUILayout.ExpandWidth(true));
+            GUILayout.Label("Since top: " + (topMemory != 0 ? ConvertToKBString(((long)memory - topMemory)) : "0"), GUILayout.ExpandWidth(true));
 
 
             GUILayout.Space(20);
@@ -912,14 +1013,29 @@ namespace GCMonitor
 
         }
 
+        static String ConvertToGBString(ulong bytes)
+        {
+            return ConvertToGBString((long) bytes);
+        }
+
         static String ConvertToGBString(long bytes)
         {
             return ((bytes >> 20) / 1024f).ToString("#,0.0", spaceFormat) + " GB";
         }
 
+        static String ConvertToMBString(ulong bytes)
+        {
+            return ConvertToMBString((long)bytes);
+        }
+
         static String ConvertToMBString(long bytes)
         {
             return (bytes >> 20).ToString("#,0", spaceFormat) + " MB";
+        }
+
+        static String ConvertToKBString(ulong bytes)
+        {
+            return ConvertToKBString((long)bytes);
         }
 
         static String ConvertToKBString(long bytes)
