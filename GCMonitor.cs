@@ -91,6 +91,10 @@ namespace GCMonitor
 
         [Persistent]
         bool displayMem = true;
+
+        [Persistent]
+        bool displayMemRss = false;
+
         [Persistent]
         bool displayFps = true;
 
@@ -104,7 +108,7 @@ namespace GCMonitor
 
         long displayMaxMemory = 200;
         long displayMinMemory = 0;
-        long maxMemory;
+        static long maxMemory;
         long topMemory;
 
         private readonly float updateInterval = 4;
@@ -133,18 +137,19 @@ namespace GCMonitor
         {
             public long min;
             public long max;
-            // technically it should be an ulong but it generate too many cast requirement
             public ulong rss;
             public long gc;
         }
 
         struct processMemory
         {
+            public ulong rss;
             public ulong vsz;
             public ulong max;
 
-            public processMemory(ulong vsz, ulong max)
+            public processMemory(ulong rss, ulong vsz, ulong max)
             {
+                this.rss = rss;
                 this.vsz = vsz;
                 this.max = max;
             }
@@ -163,7 +168,25 @@ namespace GCMonitor
         //private static extern UIntPtr getCurrentVM_Win_x64();
         //[DllImport(dllName: kDllPath_Win_x64, EntryPoint = "getMaximumVM")]
         //private static extern UIntPtr getMaximumVM_Win_x64();
-        
+
+        [DllImport("psapi.dll")]
+        private static extern int GetProcessMemoryInfo(IntPtr hProcess, [Out] PROCESS_MEMORY_COUNTERS counters, int size);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private class PROCESS_MEMORY_COUNTERS
+        {
+            public uint cb;
+            public uint PageFaultCount;
+            public uint PeakWorkingSetSize;
+            public uint WorkingSetSize;
+            public uint QuotaPeakPagedPoolUsage;
+            public uint QuotaPagedPoolUsage;
+            public uint QuotaPeakNonPagedPoolUsage;
+            public uint QuotaNonPagedPoolUsage;
+            public uint PagefileUsage;
+            public uint PeakPagefileUsage;
+        }
+
         [return: MarshalAs(UnmanagedType.Bool)]
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer); // use of [In, Out] is voluntary. see http://www.pinvoke.net/default.aspx/kernel32/GlobalMemoryStatusEx.html
@@ -187,47 +210,148 @@ namespace GCMonitor
         }
 
         private static MEMORYSTATUSEX msex;
+        private static PROCESS_MEMORY_COUNTERS pmc;
 
         private static processMemory getProcessMemoryWin()
         {
             GlobalMemoryStatusEx(msex);
-            return new processMemory(msex.ullTotalVirtual - msex.ullAvailVirtual, msex.ullTotalVirtual);
+
+            GetProcessMemoryInfo(new IntPtr(-1), pmc, Marshal.SizeOf(typeof(PROCESS_MEMORY_COUNTERS)));  
+
+            return new processMemory((ulong) pmc.WorkingSetSize, msex.ullTotalVirtual - msex.ullAvailVirtual, msex.ullTotalVirtual);
         }
-
-        // Current Linux and OSX still use the RSS. I'll have th check if it is the 
-        // right value for those (pretty sure it is not for Linux)
-
-        // Linux x86
-        private const string kDllPath_linux_x86 = "GameData/GCMonitor/getRSS_x86.so";
-        [DllImport(dllName: kDllPath_linux_x86, EntryPoint = "getCurrentRSS")]
-        private static extern UIntPtr getCurrentRSS_Linux_x86();
-        [DllImport(dllName: kDllPath_linux_x86, EntryPoint = "getPeakRSS")]
-        private static extern UIntPtr getPeakRSS_Linux_x86();
-
-        private static processMemory getProcessMemoryLinux_x86()
-        {
-            return new processMemory((ulong)getCurrentRSS_Linux_x86(), (ulong)getPeakRSS_Linux_x86());
-        }
-
-        // Linux x64
-        private const string kDllPath_linux_x64 = "GameData/GCMonitor/getRSS_x64.so";
-        [DllImport(dllName: kDllPath_linux_x64, EntryPoint = "getCurrentRSS")]
-        private static extern UIntPtr getCurrentRSS_Linux_x64();
-        [DllImport(dllName: kDllPath_linux_x64, EntryPoint = "getPeakRSS")]
-        private static extern UIntPtr getPeakRSS_Linux_x64();
         
-        private static processMemory getProcessMemoryLinux_x64()
+        // next struct and method from https://github.com/dotnet/corefx/blob/master/src/Common/src/Interop/Linux/procfs/Interop.ProcFsStat.cs
+        
+        internal struct ParsedStat
         {
-            return new processMemory((ulong)getCurrentRSS_Linux_x64(), (ulong)getPeakRSS_Linux_x64());
+            // Commented out fields are available in the stat data file but 
+            // are currently not used.  If/when needed, they can be uncommented,
+            // and the corresponding entry can be added back to StatParser, replacing
+            // the MoveNext() with the appropriate ParseNext* call and assignment.
+
+            internal int pid;
+            internal string comm;
+            internal char state;
+            //internal int ppid;
+            //internal int pgrp;
+            internal int session;
+            //internal int tty_nr;
+            //internal int tpgid;
+            //internal uint flags;
+            //internal ulong minflt;
+            //internal ulong cminflt;
+            //internal ulong majflt;
+            //internal ulong cmajflt;
+            internal ulong utime;
+            internal ulong stime;
+            //internal long cutime;
+            //internal long cstime;
+            //internal long priority;
+            internal long nice;
+            //internal long num_threads;
+            //internal long itrealvalue;
+            internal ulong starttime;
+            internal ulong vsize;
+            internal long rss;
+            internal ulong rsslim;
+            //internal ulong startcode;
+            //internal ulong endcode;
+            internal ulong startstack;
+            //internal ulong kstkesp;
+            //internal ulong kstkeip;
+            //internal ulong signal;
+            //internal ulong blocked;
+            //internal ulong sigignore;
+            //internal ulong sigcatch;
+            //internal ulong wchan;
+            //internal ulong nswap;
+            //internal ulong cnswap;
+            //internal int exit_signal;
+            //internal int processor;
+            //internal uint rt_priority;
+            //internal uint policy;
+            //internal ulong delayacct_blkio_ticks;
+            //internal ulong guest_time;
+            //internal long cguest_time;
         }
 
-        // OSX x86
-        private const string kDllPath_OSX_x86 = "GameData/GCMonitor/getRSS_OSX_x86.so";
-        [DllImport(dllName: kDllPath_OSX_x86, EntryPoint = "getCurrentRSS")]
-        private static extern UIntPtr getCurrentRSS_OSX_x86();
-        [DllImport(dllName: kDllPath_OSX_x86, EntryPoint = "getPeakRSS")]
-        private static extern UIntPtr getPeakRSS_OSX_x86();
+        private const string SelfStat = "/proc/self/stat";
 
+        private static void ParseStatFile()
+        {
+            string statFileContents = System.IO.File.ReadAllText(SelfStat);
+
+            var parser = new StringParser(statFileContents, ' ');
+
+            linuxStat.pid = parser.ParseNextInt32();
+            linuxStat.comm = parser.ParseRaw(delegate (string str, ref int startIndex, ref int endIndex)
+            {
+                if (str[startIndex] == '(')
+                {
+                    int i;
+                    for (i = endIndex; i < str.Length && str[i - 1] != ')'; i++) ;
+                    if (str[i - 1] == ')')
+                    {
+                        endIndex = i;
+                        return str.Substring(startIndex + 1, i - startIndex - 2);
+                    }
+                }
+                throw new InvalidDataException();
+            });
+            linuxStat.state = parser.ParseNextChar();
+            parser.MoveNextOrFail(); // ppid
+            parser.MoveNextOrFail(); // pgrp
+            linuxStat.session = parser.ParseNextInt32();
+            parser.MoveNextOrFail(); // tty_nr
+            parser.MoveNextOrFail(); // tpgid
+            parser.MoveNextOrFail(); // flags
+            parser.MoveNextOrFail(); // majflt
+            parser.MoveNextOrFail(); // cmagflt
+            parser.MoveNextOrFail(); // minflt
+            parser.MoveNextOrFail(); // cminflt
+            linuxStat.utime = parser.ParseNextUInt64();
+            linuxStat.stime = parser.ParseNextUInt64();
+            parser.MoveNextOrFail(); // cutime
+            parser.MoveNextOrFail(); // cstime
+            parser.MoveNextOrFail(); // priority
+            linuxStat.nice = parser.ParseNextInt64();
+            parser.MoveNextOrFail(); // num_threads
+            parser.MoveNextOrFail(); // itrealvalue
+            linuxStat.starttime = parser.ParseNextUInt64();
+            linuxStat.vsize = parser.ParseNextUInt64();
+            linuxStat.rss = parser.ParseNextInt64();
+            linuxStat.rsslim = parser.ParseNextUInt64();
+            parser.MoveNextOrFail(); // startcode
+            parser.MoveNextOrFail(); // endcode
+            linuxStat.startstack = parser.ParseNextUInt64();
+            parser.MoveNextOrFail(); // kstkesp
+            parser.MoveNextOrFail(); // kstkeip
+            parser.MoveNextOrFail(); // signal
+            parser.MoveNextOrFail(); // blocked
+            parser.MoveNextOrFail(); // sigignore
+            parser.MoveNextOrFail(); // sigcatch
+            parser.MoveNextOrFail(); // wchan
+            parser.MoveNextOrFail(); // nswap
+            parser.MoveNextOrFail(); // cnswap
+            parser.MoveNextOrFail(); // exit_signal
+            parser.MoveNextOrFail(); // processor
+            parser.MoveNextOrFail(); // rt_priority
+            parser.MoveNextOrFail(); // policy
+            parser.MoveNextOrFail(); // delayacct_blkio_ticks
+            parser.MoveNextOrFail(); // guest_time
+            parser.MoveNextOrFail(); // cguest_time
+        }
+
+        private static ParsedStat linuxStat;
+
+        private static processMemory getProcessMemoryLinux()
+        {
+            ParseStatFile();
+            return new processMemory((ulong)linuxStat.rss, linuxStat.vsize, linuxStat.rsslim);
+        }
+
+        // OSX
         private struct time_value
         {
             public int seconds;
@@ -242,63 +366,40 @@ namespace GCMonitor
             public time_value user_time;
             public time_value system_time;
             public int policy;
-        }
-
-        //struct task_basic_info_64
-        //{
-        //    integer_t suspend_count;  /* suspend count for task */
-        //    mach_vm_size_t virtual_size;   /* virtual memory size (bytes) */
-        //    mach_vm_size_t resident_size;  /* resident memory size (bytes) */
-        //    time_value_t user_time;      /* total user run time for
-        //                                   terminated threads */
-        //    time_value_t system_time;    /* total system run time for
-        //                                   terminated threads */
-        //    policy_t policy;        /* default policy for new threads */
-        //};
-
+        } 
+        
         private enum task_flavor_t
         {
             TASK_BASIC_INFO_32 = 4,
             TASK_BASIC_INFO_64 = 5,
-            TASK_BASIC2_INFO_32 = 6
         }
 
         [DllImport("libc.dylib")]
         private static extern IntPtr mach_task_self();
 
         [DllImport("libc.dylib")]
-        //private static extern int task_info(IntPtr task, task_flavor_t flavor, IntPtr taskInfoStructure, ref int structureLength);
         private static extern int task_info(IntPtr task, task_flavor_t flavor, IntPtr taskInfoStructure, ref int structureLength);
 
-        private static unsafe processMemory getProcessMemoryLinux_OSX()
+        private static int structureLengthOSX;
+        private static task_flavor_t taskFlavorOSX;
+
+        private static unsafe processMemory getProcessMemoryOSX()
         {
             var result = new task_basic_info();
-            int structureLength = Marshal.SizeOf(typeof(task_basic_info)) / IntPtr.Size;
-
-            task_info(mach_task_self(), task_flavor_t.TASK_BASIC_INFO_32, new IntPtr(&result), ref structureLength);
-
-
-            return new processMemory((ulong)result.virtual_size >> 20, (ulong)result.virtual_size >> 20);
+            task_info(mach_task_self(), taskFlavorOSX, new IntPtr(&result), ref structureLengthOSX);
+            return new processMemory((ulong)result.resident_size, (ulong)result.virtual_size, (ulong)maxMemory);
         }
-
-        //private static UIntPtr unimplemented()
-        //{
-        //    return (UIntPtr)0;
-        //}
-
-        //public delegate UIntPtr GetCurrentVM();
-        //public static GetCurrentVM getCurrentVM;
-        //public delegate UIntPtr GetMaximumVM();
-        //public static GetMaximumVM getMaximumVM;
 
         public static ulong warnMem;
         public static ulong alertMem;
-        public static string memoryString;
-        public static ulong memory;
+        public static string memoryVszString;
+        public static ulong memoryVsz;
+        public static string memoryRssString;
+        public static ulong memoryRss;
 
         private static processMemory getProcessMemory_unimplemented()
         {
-            return new processMemory(0, 0);
+            return new processMemory(0, 0, 0);
         }
 
         private delegate processMemory GetProcessMemory();
@@ -338,20 +439,17 @@ namespace GCMonitor
             switch (Application.platform)
             {
                 case RuntimePlatform.LinuxPlayer:
-                    if (IsX64())
-                    {
-                        getProcessMemory = getProcessMemoryLinux_x64;
-                    }
-                    else
-                    {
-                        getProcessMemory = getProcessMemoryLinux_x86;
-                    }
+                    linuxStat = new ParsedStat();
+                    getProcessMemory = getProcessMemoryLinux;
                     break;
                 case RuntimePlatform.OSXPlayer:
-                    getProcessMemory = getProcessMemoryLinux_OSX;
+                    taskFlavorOSX = IsX64() ? task_flavor_t.TASK_BASIC_INFO_64 : task_flavor_t.TASK_BASIC_INFO_32;
+                    structureLengthOSX = Marshal.SizeOf(typeof(task_basic_info)) / IntPtr.Size;
+                    getProcessMemory = getProcessMemoryOSX;
                     break;
                 case RuntimePlatform.WindowsPlayer:
                     msex = new MEMORYSTATUSEX();
+                    pmc = new PROCESS_MEMORY_COUNTERS();
                     getProcessMemory = getProcessMemoryWin;
                     break;
                 default:
@@ -361,10 +459,7 @@ namespace GCMonitor
 
             try
             {
-                GlobalMemoryStatusEx(msex);
-
                 processMemory p = getProcessMemory();
-
                 Debug.Log("[GCMonitor] Delegates OK " + ConvertToMBString(p.vsz) + " / " + ConvertToMBString(p.max));
             }
             catch (Exception e)
@@ -378,12 +473,11 @@ namespace GCMonitor
             if (Application.platform == RuntimePlatform.WindowsPlayer && getProcessMemory().max != 0)
             {
                 maxAllowedMem = getProcessMemory().max;
-                Debug.Log("[GCMonitor] Maximum usable memory " + ConvertToGBString(maxAllowedMem) + " / " + ConvertToMBString(maxAllowedMem));
+                Debug.Log("[GCMonitor] Maximum usable memoryVsz " + ConvertToGBString(maxAllowedMem) + " / " + ConvertToMBString(maxAllowedMem));
             }
 
             warnMem = (ulong)(maxAllowedMem * warnPercent);
             alertMem = (ulong)(maxAllowedMem * alertPercent);
-
 
             GameEvents.onShowUI.Add(ShowGUI);
             GameEvents.onHideUI.Add(HideGUI);
@@ -439,8 +533,13 @@ namespace GCMonitor
                 dt -= 1.0f / updateRate;
             }
 
-            memory = getProcessMemory().vsz;
-            memoryString = ConvertToMBString(memory);
+
+            processMemory memory = getProcessMemory();
+            memoryVsz = memory.vsz;
+            memoryVszString = ConvertToMBString(memoryVsz);
+
+            memoryRss = memory.rss;
+            memoryRssString = ConvertToMBString(memoryRss);
 
             lmb = lmb | Input.GetMouseButtonDown(0);
             rmb = rmb | Input.GetMouseButtonDown(1);
@@ -537,11 +636,11 @@ namespace GCMonitor
 
             MemState state;
 
-            if (memory < warnMem)
+            if (memoryVsz < warnMem)
             {
                 state = MemState.NORMAL;
             }
-            else if (memory < alertMem)
+            else if (memoryVsz < alertMem)
             {
                 state = MemState.WARNING;
             }
@@ -588,7 +687,7 @@ namespace GCMonitor
 
             if (tbButton != null)
             {
-                tbButton.ToolTip = memoryString;
+                tbButton.ToolTip = memoryVszString;
             }
 
             if (state == activeMemState)
@@ -826,7 +925,7 @@ namespace GCMonitor
 
                 fpsLabelStyle.fontSize = fpsSize;
 
-                Vector2 size = fpsLabelStyle.CalcSize(new GUIContent(memoryString));
+                Vector2 size = fpsLabelStyle.CalcSize(new GUIContent(memoryVszString));
 
                 fpsX = Mathf.Clamp(fpsX, 0, Screen.width);
                 fpsY = Mathf.Clamp(fpsY, 0, Screen.height);
@@ -834,10 +933,17 @@ namespace GCMonitor
                 fpsPos.Set(fpsX, fpsY, 200, size.y);
                 if (displayMem)
                 {
-                    DrawOutline(fpsPos, memoryString, 1, fpsLabelStyle, Color.black,
-                        memory > alertMem ? Color.red : memory > warnMem ? XKCDColors.Orange : Color.white);
+                    DrawOutline(fpsPos, memoryVszString, 1, fpsLabelStyle, Color.black,
+                        memoryVsz > alertMem ? Color.red : memoryVsz > warnMem ? XKCDColors.Orange : Color.white);
                     fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 200, size.y);
                 }
+
+                if (displayMemRss)
+                {
+                    DrawOutline(fpsPos, memoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
+                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 200, size.y);
+                }
+
                 if (displayFps)
                 {
                     DrawOutline(fpsPos, fpsString, 1, fpsLabelStyle, Color.black, Color.white);
@@ -931,10 +1037,10 @@ namespace GCMonitor
 
             if (GUILayout.Button("Top", GUILayout.ExpandWidth(false)))
             {
-                topMemory = (long) memory;
+                topMemory = (long) memoryVsz;
             }
 
-            GUILayout.Label("Since top: " + (topMemory != 0 ? ConvertToKBString(((long)memory - topMemory)) : "0"), GUILayout.ExpandWidth(true));
+            GUILayout.Label("Since top: " + (topMemory != 0 ? ConvertToKBString(((long)memoryVsz - topMemory)) : "0"), GUILayout.ExpandWidth(true));
 
 
             GUILayout.Space(20);
@@ -972,11 +1078,12 @@ namespace GCMonitor
             GUILayout.BeginVertical();
 
             useAppLauncher = GUILayout.Toggle(useAppLauncher, "Display Launcher Icon", GUILayout.ExpandWidth(false));
-            memoryGizmo = GUILayout.Toggle(memoryGizmo, "Display KSP memory and FPS", GUILayout.ExpandWidth(false));
+            memoryGizmo = GUILayout.Toggle(memoryGizmo, "Display KSP memoryVsz and FPS", GUILayout.ExpandWidth(false));
 
             GUILayout.BeginHorizontal();
             displayFps = GUILayout.Toggle(displayFps, "FPS");
             displayMem = GUILayout.Toggle(displayMem, "Memory");
+            displayMemRss = GUILayout.Toggle(displayMemRss, "Memory (RSS)");
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
@@ -1013,32 +1120,32 @@ namespace GCMonitor
 
         }
 
-        static String ConvertToGBString(ulong bytes)
+        static String ConvertToGBString(long bytes)
         {
-            return ConvertToGBString((long) bytes);
+            return ConvertToGBString((ulong) bytes);
         }
 
-        static String ConvertToGBString(long bytes)
+        static String ConvertToGBString(ulong bytes)
         {
             return ((bytes >> 20) / 1024f).ToString("#,0.0", spaceFormat) + " GB";
         }
 
-        static String ConvertToMBString(ulong bytes)
+        static String ConvertToMBString(long bytes)
         {
-            return ConvertToMBString((long)bytes);
+            return ConvertToMBString((ulong)bytes);
         }
 
-        static String ConvertToMBString(long bytes)
+        static String ConvertToMBString(ulong bytes)
         {
             return (bytes >> 20).ToString("#,0", spaceFormat) + " MB";
         }
 
-        static String ConvertToKBString(ulong bytes)
+        static String ConvertToKBString(long bytes)
         {
-            return ConvertToKBString((long)bytes);
+            return ConvertToKBString((ulong)bytes);
         }
 
-        static String ConvertToKBString(long bytes)
+        static String ConvertToKBString(ulong bytes)
         {
             return (bytes >> 10).ToString("#,0", spaceFormat) + " kB";
         }
