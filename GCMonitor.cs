@@ -76,6 +76,8 @@ namespace GCMonitor
         [Persistent]
         bool realMemory = true;
         [Persistent]
+        bool gpuMemory = false;
+        [Persistent]
         bool relative = false;
         [Persistent]
         bool colorfulMode = false;
@@ -94,6 +96,9 @@ namespace GCMonitor
 
         [Persistent]
         bool displayMemRss = false;
+
+        [Persistent]
+        bool displayGpu = true;
 
         [Persistent]
         bool displayFps = true;
@@ -139,6 +144,7 @@ namespace GCMonitor
             public long max;
             public ulong rss;
             public long gc;
+            public long gpu;
         }
 
         struct processMemory
@@ -395,6 +401,7 @@ namespace GCMonitor
         public static string memoryVszString;
         public static ulong memoryVsz;
         public static string memoryRssString;
+        public static string gpuMemoryRssString;
         public static ulong memoryRss;
 
         private static processMemory getProcessMemory_unimplemented()
@@ -451,6 +458,7 @@ namespace GCMonitor
                     msex = new MEMORYSTATUSEX();
                     pmc = new PROCESS_MEMORY_COUNTERS();
                     getProcessMemory = getProcessMemoryWin;
+                    InitGpuMonitor();
                     break;
                 default:
                     getProcessMemory = getProcessMemory_unimplemented;
@@ -481,7 +489,7 @@ namespace GCMonitor
 
             GameEvents.onShowUI.Add(ShowGUI);
             GameEvents.onHideUI.Add(HideGUI);
-
+            
             watch = new Stopwatch();
             watch.Start();
             // Does not exist on our mono version :(
@@ -519,6 +527,8 @@ namespace GCMonitor
         private bool lmb;
 
         private MemState activeMemState;
+
+        
         public void Update()
         {
             frameCount++;
@@ -540,6 +550,12 @@ namespace GCMonitor
 
             memoryRss = memory.rss;
             memoryRssString = ConvertToMBString(memoryRss);
+
+            if (adapter != null)
+            {
+                adapter.UpdateValues();
+                gpuMemoryRssString = ConvertToMBString(adapter.DedicatedVramUsage);
+            }
 
             lmb = lmb | Input.GetMouseButtonDown(0);
             rmb = rmb | Input.GetMouseButtonDown(1);
@@ -571,11 +587,11 @@ namespace GCMonitor
             long minMemory = 0;
             for (int i = 0; i < memoryHistory.Length; i++)
             {
-                long mem = realMemory ? (long)memoryHistory[i].rss : memoryHistory[i].max;
+                long mem = realMemory ? (long)memoryHistory[i].rss : (gpuMemory ? memoryHistory[i].gpu : memoryHistory[i].max);
                 if (relative)
                 {
                     int index = i != 0 ? (i - 1) : memoryHistory.Length - 1;
-                    long pmem = realMemory ? (long)memoryHistory[index].rss : memoryHistory[index].max;
+                    long pmem = realMemory ? (long)memoryHistory[index].rss : (gpuMemory ? memoryHistory[index].gpu : memoryHistory[index].max);
                     mem = pmem == 0 ? 0 : mem - pmem;
                 }
                 if (mem > maxMemory)
@@ -783,6 +799,13 @@ namespace GCMonitor
                 memoryHistory[activeSecond].max = mem;
 
             memoryHistory[activeSecond].rss = getProcessMemory().vsz;
+
+            if (adapter != null)
+            {
+                adapter.UpdateValues();
+                memoryHistory[activeSecond].gpu = adapter.DedicatedVramUsage;
+            }
+
         }
 
         private void ShowGUI()
@@ -856,14 +879,14 @@ namespace GCMonitor
 
         private void UpdateTexture(int x, int last)
         {
-            int min = Mathf.RoundToInt(ratio * (realMemory ? (long)memoryHistory[x].rss : memoryHistory[x].min));
-            int max = Mathf.RoundToInt(ratio * (realMemory ? (long)memoryHistory[x].rss : memoryHistory[x].max));
+            int min = Mathf.RoundToInt(ratio * (realMemory ? (long)memoryHistory[x].rss : (gpuMemory ? memoryHistory[x].gpu : memoryHistory[x].min)));
+            int max = Mathf.RoundToInt(ratio * (realMemory ? (long)memoryHistory[x].rss : (gpuMemory ? memoryHistory[x].gpu : memoryHistory[x].max)));
 
             int zero = -Mathf.RoundToInt(ratio * displayMinMemory);
             if (relative)
             {
                 int index = x != 0 ? (x - 1) : memoryHistory.Length - 1;
-                int pmem = Mathf.RoundToInt(ratio * (realMemory ? memoryHistory[index].rss : (ulong)memoryHistory[index].max));
+                int pmem = Mathf.RoundToInt(ratio * (realMemory ? memoryHistory[index].rss : (gpuMemory ? (ulong)memoryHistory[index].gpu : (ulong)memoryHistory[index].max)));
                 max = pmem == 0 ? 0 : max - pmem;
                 max = max + zero;
             }
@@ -877,7 +900,7 @@ namespace GCMonitor
                 {
                     if (!relative)
                     {
-                        if (!realMemory && y < 10 * memoryHistory[x].gc)
+                        if (!(realMemory || gpuMemory) && y < 10 * memoryHistory[x].gc)
                             color = Color.red;
                         else if (y <= min && max != 0)
                             color = Color.grey;
@@ -941,7 +964,13 @@ namespace GCMonitor
                 if (displayMemRss)
                 {
                     DrawOutline(fpsPos, memoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
-                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 200, size.y);
+                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
+                }
+
+                if (displayGpu)
+                {
+                    DrawOutline(fpsPos, gpuMemoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
+                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
                 }
 
                 if (displayFps)
@@ -995,12 +1024,23 @@ namespace GCMonitor
             bool preveReal = realMemory;
             realMemory = GUILayout.Toggle(realMemory, "KSP process", GUILayout.ExpandWidth(false));
             if (preveReal != realMemory)
+            {
                 fullUpdate = true;
+                if (gpuMemory)
+                    gpuMemory = false;
+            }
+
+            bool preveGpu = gpuMemory;
+            gpuMemory = adapter != null && GUILayout.Toggle(gpuMemory, "GPU", GUILayout.ExpandWidth(false));
+            if (preveGpu != gpuMemory)
+            {
+                fullUpdate = true;
+                if (realMemory)
+                    realMemory = false;
+            }
 
             bool preveRel = relative;
-
             relative = GUILayout.Toggle(relative, "Relative Mode", GUILayout.ExpandWidth(false));
-
             if (preveRel != relative)
                 fullUpdate = true;
 
@@ -1020,6 +1060,8 @@ namespace GCMonitor
             processMemory mem = getProcessMemory();
 
             GUILayout.Label("KSP: " + ConvertToKBString(mem.vsz) + " / " + ConvertToKBString(mem.max), GUILayout.ExpandWidth(false));
+            if (adapter != null)
+                GUILayout.Label("GPU: " + ConvertToKBString(adapter.DedicatedVramUsage) + " / " + ConvertToKBString(adapter.DedicatedVramLimit), GUILayout.ExpandWidth(false));
 
             GUILayout.Space(20);
 
@@ -1086,6 +1128,8 @@ namespace GCMonitor
             displayMemRss = GUILayout.Toggle(displayMemRss, "Memory (RSS)");
             GUILayout.EndHorizontal();
 
+            displayGpu = adapter != null && GUILayout.Toggle(displayGpu, "Memory (GPU)");
+
             GUILayout.BeginHorizontal();
             GUILayout.Label("Size", GUILayout.Width(40));
             if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
@@ -1122,7 +1166,7 @@ namespace GCMonitor
 
         static String ConvertToGBString(long bytes)
         {
-            return ConvertToGBString((ulong) bytes);
+            return (bytes / 1024f / 1024f / 1024f).ToString("#,0.0", spaceFormat) + " GB";
         }
 
         static String ConvertToGBString(ulong bytes)
@@ -1132,7 +1176,7 @@ namespace GCMonitor
 
         static String ConvertToMBString(long bytes)
         {
-            return ConvertToMBString((ulong)bytes);
+            return (bytes / 1024 / 1024).ToString("#,0", spaceFormat) + " MB";
         }
 
         static String ConvertToMBString(ulong bytes)
@@ -1142,7 +1186,7 @@ namespace GCMonitor
 
         static String ConvertToKBString(long bytes)
         {
-            return ConvertToKBString((ulong)bytes);
+            return (bytes / 1024).ToString("#,0", spaceFormat) + " kB";
         }
 
         static String ConvertToKBString(ulong bytes)
@@ -1173,6 +1217,247 @@ namespace GCMonitor
         {
             MonoBehaviour.print("[GCMonitor] " + message.ToString());
         }
+
+
+        private static int WinVersion_Current = Environment.OSVersion.Version.Major * 1000 + Environment.OSVersion.Version.Minor;
+
+        public void InitGpuMonitor()
+        {
+
+            try
+            {
+                print("Getting Adapters info");
+
+                D3DKMT_ENUMADAPTERS adapters = new D3DKMT_ENUMADAPTERS();
+
+                IntPtr adaptersPtr = Marshal.AllocHGlobal(Marshal.SizeOf(adapters)); //Allocate unmanaged Memory
+                Marshal.StructureToPtr(adapters, adaptersPtr, true);
+
+                if (D3DKMT.Nt_Success(D3DKMT.D3DKMTEnumAdapters(adaptersPtr)))
+                {
+                    adapters =
+                        (D3DKMT_ENUMADAPTERS) Marshal.PtrToStructure(adaptersPtr, typeof (D3DKMT_ENUMADAPTERS));
+                    uint segmentCount = adapters.NumAdapters;
+
+                    print("Got " + segmentCount + " adapters");
+
+                    adapter = new Adapter(adapters.Adapter1.AdapterLuid, "GPU1");
+                }
+
+                Marshal.FreeHGlobal(adaptersPtr);
+            }
+            catch
+            {
+                // Well, things got weird. adapter will be null so we can test that.
+            }
+        }
+
+        public enum WinVersion
+        {
+            Windows_95 = 4000,
+            Windows_NT = 4000,
+            Windows_98 = 4010,
+            Windows_ME = 4090,
+            Windows_2000 = 5000,
+            Windows_XP = 5001,
+            Windows_2003 = 5002,
+            Windows_Vista = 6000,
+            Windows_2008 = 6000,
+            Windows_7 = 6001,
+            Windows_2008_R2 = 6001,
+            Windows_8 = 6002,
+        }
+
+        public Adapter adapter;
+
+        public class Adapter
+        {
+            private static int WinVersion_Current = Environment.OSVersion.Version.Major * 1000 + Environment.OSVersion.Version.Minor;
+
+            
+            private DateTime lastUpdated;
+            private long oldTotalRunningTime;
+            //private int memoryOffset;
+            #region Properties
+            public LUID Luid { get; private set; }
+            public string Description { get; private set; }
+            private long _SharedVramUsage;
+            private long _DedicatedVramUsage;
+            private long _SharedVramLimit;
+            private int _Usage;
+            private long _DedicatedVramLimit;
+            public int Usage
+            {
+                get
+                {
+                    return _Usage;
+                }
+                private set
+                {
+                    if (value == _Usage) return;
+                    if (value > 100) value = 100;
+                    _Usage = value;
+                }
+            }
+            public long DedicatedVramLimit
+            {
+                get
+                {
+                    return _DedicatedVramLimit;
+                }
+                private set
+                {
+                    if (value == _DedicatedVramLimit) return;
+                    _DedicatedVramLimit = value;
+                }
+            }
+            public long SharedVramLimit
+            {
+                get { return _SharedVramLimit; }
+                private set
+                {
+                    if (value == _SharedVramLimit) return;
+                    _SharedVramLimit = value;
+                }
+            }
+            public long DedicatedVramUsage
+            {
+                get { return _DedicatedVramUsage; }
+                private set
+                {
+                    if (value == _DedicatedVramUsage) return;
+                    _DedicatedVramUsage = value;
+                }
+            }
+            public long SharedVramUsage
+            {
+                get { return _SharedVramUsage; }
+                private set
+                {
+                    if (value == _SharedVramUsage) return;
+                    _SharedVramUsage = value;
+                }
+            }
+            #endregion
+            #region Construction
+            public Adapter(LUID Luid, string Description)
+            {
+                this.Luid = Luid;
+                this.Description = Description;
+                UpdateValues();
+            }
+            #endregion
+            #region Methods
+            public void UpdateValues()
+            {
+                //Check for Video Memory
+                uint NodeCount = 0;
+                D3DKMT_QUERYSTATISTICS queryStatistics = new D3DKMT_QUERYSTATISTICS();
+                queryStatistics.Type = D3DKMT_QUERYSTATISTICS_TYPE.D3DKMT_QUERYSTATISTICS_ADAPTER;
+                queryStatistics.AdapterLuid = Luid;
+                IntPtr queryStatisticsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(queryStatistics)); //Allocate unmanaged Memory
+                Marshal.StructureToPtr(queryStatistics, queryStatisticsPtr, true);
+                if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics(queryStatisticsPtr)))
+                {
+
+                    queryStatistics = (D3DKMT_QUERYSTATISTICS)Marshal.PtrToStructure(queryStatisticsPtr, typeof(D3DKMT_QUERYSTATISTICS));
+                    uint segmentCount = queryStatistics.QueryResult.AdapterInformation.NbSegments;
+                    NodeCount = queryStatistics.QueryResult.AdapterInformation.NodeCount;
+
+                    ulong GpuSharedLimit = 0;
+                    ulong GpuDedicatedLimit = 0;
+                    ulong GpuSharedBytesUsed = 0;
+                    ulong GpuDedicatedBytesUsed = 0;
+                    /*
+                     * In this Part we query the Vram Usage by D3DKMT. You can make it better if you use a float or decimal instead of an int.
+                     * Since we cant get all segments (some of them are locked) ~7mb missing, we check via WMI how many Mb are missing and add them to our Value (memoryOffset).
+                     */
+                    for (uint i = 0; i < segmentCount; i++)
+                    {
+                        queryStatistics = new D3DKMT_QUERYSTATISTICS();
+                        queryStatistics.Type = D3DKMT_QUERYSTATISTICS_TYPE.D3DKMT_QUERYSTATISTICS_SEGMENT;
+                        queryStatistics.AdapterLuid = Luid;
+                        queryStatistics.QueryUnion.QuerySegment.SegmentId = i;
+                        Marshal.StructureToPtr(queryStatistics, queryStatisticsPtr, true);
+                        if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics(queryStatisticsPtr)))
+                        {
+                            queryStatistics = (D3DKMT_QUERYSTATISTICS)Marshal.PtrToStructure(queryStatisticsPtr, typeof(D3DKMT_QUERYSTATISTICS));
+                            UInt64 commitLimit;
+                            UInt32 aperture; //Boolean; For System and Graphics
+                            UInt64 bytesCommitted;
+                            if (WinVersion_Current >= (int)WinVersion.Windows_8)
+                            {
+                                bytesCommitted = queryStatistics.QueryResult.SegmentInformation.BytesCommitted;
+                                commitLimit = queryStatistics.QueryResult.SegmentInformation.CommitLimit;
+                                aperture = queryStatistics.QueryResult.SegmentInformation.Aperture;
+                            }
+                            else
+                            {
+                                bytesCommitted = (UInt64)queryStatistics.QueryResult.SegmentInformation.BytesCommitted;
+                                commitLimit = queryStatistics.QueryResult.SegmentInformationV1.CommitLimit;
+                                aperture = queryStatistics.QueryResult.SegmentInformationV1.Aperture;
+                            }
+                            if (aperture == 1)
+                            {
+                                GpuSharedLimit += commitLimit;
+                                GpuSharedBytesUsed += bytesCommitted;
+                            }
+                            else
+                            {
+                                GpuDedicatedLimit += commitLimit;
+                                GpuDedicatedBytesUsed += bytesCommitted;
+                            }
+                        }
+                    }
+
+                    DedicatedVramUsage = (long)GpuDedicatedBytesUsed;
+                    DedicatedVramLimit = (long)GpuDedicatedLimit;
+                    SharedVramUsage = (long)GpuSharedBytesUsed;
+                    SharedVramLimit = (long)GpuSharedLimit;
+
+                    /*
+                    System.Diagnostics.Debug.WriteLine("SharedUsage " + (GpuSharedBytesUsed * 9.53674316e-7) + "Mb; DedicatedUsage " + (GpuDedicatedBytesUsed * 9.53674316e-7) + "Mb");
+                    System.Diagnostics.Debug.WriteLine("SharedLimit " + GpuSharedLimit * 9.53674316e-7 + "Mb; DedicatedLimit " + GpuDedicatedLimit * 9.53674316e-7 + "Mb");
+                    */
+                }
+
+                //Check for GPU Usage
+                long totalRunningTime = 0;
+
+                for (uint i = 0; i < NodeCount; i++)
+                {
+                    queryStatistics = new D3DKMT_QUERYSTATISTICS();
+                    queryStatistics.Type = D3DKMT_QUERYSTATISTICS_TYPE.D3DKMT_QUERYSTATISTICS_NODE;
+                    queryStatistics.AdapterLuid = Luid;
+                    queryStatistics.QueryUnion.QueryNode.NodeId = i;
+                    Marshal.StructureToPtr(queryStatistics, queryStatisticsPtr, true);
+                    if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics(queryStatisticsPtr)))
+                    {
+                        queryStatistics = (D3DKMT_QUERYSTATISTICS)Marshal.PtrToStructure(queryStatisticsPtr, typeof(D3DKMT_QUERYSTATISTICS));
+                        totalRunningTime += queryStatistics.QueryResult.NodeInformation.GlobalInformation.RunningTime.QuadPart;
+                    }
+                }
+                Marshal.FreeHGlobal(queryStatisticsPtr); //Free Allocated Memory
+
+                long totalRunningTimeDelta = totalRunningTime - oldTotalRunningTime;
+                Usage = (int)((double)totalRunningTimeDelta / ((DateTime.Now - lastUpdated).Milliseconds * 100));
+
+                oldTotalRunningTime = totalRunningTime;
+                lastUpdated = DateTime.Now;
+            }
+            #endregion
+        }
+
+
+
+
+
+
+
+
+
+
+
 
     }
 }
