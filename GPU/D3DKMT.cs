@@ -111,7 +111,8 @@ namespace GCMonitor
     [StructLayout(LayoutKind.Sequential)]
     public unsafe struct D3DKMT_QUERYSTATISTICS_PREEMPTION_INFORMATION //OK
     {
-        public fixed UInt32 PreemptionCounter[(int)D3DKMT_QUERYRESULT_PREEMPTION_ATTEMPT_RESULT.D3DKMT_PreemptionAttemptStatisticsMax]; //[D3DKMT_PreemptionAttemptStatisticsMax]
+        //public fixed UInt32 PreemptionCounter[(int)D3DKMT_QUERYRESULT_PREEMPTION_ATTEMPT_RESULT.D3DKMT_PreemptionAttemptStatisticsMax]; //[D3DKMT_PreemptionAttemptStatisticsMax]
+        public fixed UInt32 PreemptionCounter[16]; //[D3DKMT_PreemptionAttemptStatisticsMax]
     }
     [StructLayout(LayoutKind.Sequential)]
     public unsafe struct D3DKMT_QUERYSTATISTICS_PROCESS_NODE_INFORMATION
@@ -315,8 +316,10 @@ namespace GCMonitor
     [StructLayout(LayoutKind.Sequential)]
     public unsafe struct D3DKMT_QUERYSTATISTICS_POLICY
     {
-        public fixed UInt64 PreferApertureForRead[(int)D3DKMT_QUERYSTATISTICS_ALLOCATION_PRIORITY_CLASS.D3DKMT_MaxAllocationPriorityClass]; //D3DKMT_MaxAllocationPriorityClass
-        public fixed UInt64 PreferAperture[(int)D3DKMT_QUERYSTATISTICS_ALLOCATION_PRIORITY_CLASS.D3DKMT_MaxAllocationPriorityClass]; //D3DKMT_MaxAllocationPriorityClass
+        //public fixed UInt64 PreferApertureForRead[(int)D3DKMT_QUERYSTATISTICS_ALLOCATION_PRIORITY_CLASS.D3DKMT_MaxAllocationPriorityClass]; //D3DKMT_MaxAllocationPriorityClass
+        public fixed UInt64 PreferApertureForRead[5]; //D3DKMT_MaxAllocationPriorityClass
+        //public fixed UInt64 PreferAperture[(int)D3DKMT_QUERYSTATISTICS_ALLOCATION_PRIORITY_CLASS.D3DKMT_MaxAllocationPriorityClass]; //D3DKMT_MaxAllocationPriorityClass
+        public fixed UInt64 PreferAperture[5]; //D3DKMT_MaxAllocationPriorityClass
         public UInt64 MemResetOnPaging;
         public UInt64 RemovePagesFromWorkingSetOnPaging;
         public UInt64 MigrationEnabled;
@@ -367,7 +370,7 @@ namespace GCMonitor
         public UInt32 BytesResident;
         public D3DKMT_QUERYSTATISTICS_MEMORY Memory;
         public UInt32 Aperture; // boolean 
-        public fixed UInt64 TotalBytesEvictedByPriority[(int)D3DKMT_QUERYSTATISTICS_ALLOCATION_PRIORITY_CLASS.D3DKMT_MaxAllocationPriorityClass]; //5
+        public fixed UInt64 TotalBytesEvictedByPriority[5]; //5
         public UInt64 SystemMemoryEndAddress;
         public POWERFLAGS PowerFlags;
         public fixed UInt64 Reserved[7];
@@ -380,7 +383,7 @@ namespace GCMonitor
         public UInt64 BytesResident;
         public D3DKMT_QUERYSTATISTICS_MEMORY Memory;
         public UInt32 Aperture; // boolean
-        public fixed UInt64 TotalBytesEvictedByPriority[(int)D3DKMT_QUERYSTATISTICS_ALLOCATION_PRIORITY_CLASS.D3DKMT_MaxAllocationPriorityClass]; //5
+        public fixed UInt64 TotalBytesEvictedByPriority[5]; //5
         public UInt64 SystemMemoryEndAddress;
         public POWERFLAGS PowerFlags;
         public fixed UInt64 Reserved[6]; 
