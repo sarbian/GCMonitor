@@ -98,6 +98,9 @@ namespace GCMonitor
         bool displayMemRss = false;
 
         [Persistent]
+        bool displayPeakRss = false;
+
+        [Persistent]
         bool displayGpu = true;
 
         [Persistent]
@@ -113,7 +116,7 @@ namespace GCMonitor
 
         long displayMaxMemory = 200;
         long displayMinMemory = 0;
-        static long maxMemory;
+        static ulong peakMemory;
         long topMemory;
 
         private readonly float updateInterval = 4;
@@ -391,9 +394,9 @@ namespace GCMonitor
 
         private static unsafe processMemory getProcessMemoryOSX()
         {
-            var result = new task_basic_info();
-            task_info(mach_task_self(), taskFlavorOSX, new IntPtr(&result), ref structureLengthOSX);
-            return new processMemory((ulong)result.resident_size, (ulong)result.virtual_size, (ulong)maxMemory);
+            var resultOSX = new task_basic_info();
+            task_info(mach_task_self(), taskFlavorOSX, new IntPtr(&resultOSX), ref structureLengthOSX);
+            return new processMemory((ulong)resultOSX.resident_size, (ulong)resultOSX.virtual_size, maxAllowedMem);
         }
 
         public static ulong warnMem;
@@ -401,8 +404,10 @@ namespace GCMonitor
         public static string memoryVszString;
         public static ulong memoryVsz;
         public static string memoryRssString;
+        public static string memoryPeakRssString;
         public static string gpuMemoryRssString;
         public static ulong memoryRss;
+        public static ulong maxAllowedMem;
 
         private static processMemory getProcessMemory_unimplemented()
         {
@@ -476,7 +481,8 @@ namespace GCMonitor
                 getProcessMemory = getProcessMemory_unimplemented;
             }
 
-            ulong maxAllowedMem = IsX64() ? ulong.MaxValue : uint.MaxValue;
+            
+            maxAllowedMem = IsX64() ? (ulong) (SystemInfo.systemMemorySize << 20) : uint.MaxValue;
 
             if (Application.platform == RuntimePlatform.WindowsPlayer && getProcessMemory().max != 0)
             {
@@ -543,13 +549,14 @@ namespace GCMonitor
                 dt -= 1.0f / updateRate;
             }
 
-
             processMemory memory = getProcessMemory();
             memoryVsz = memory.vsz;
             memoryVszString = ConvertToMBString(memoryVsz);
 
             memoryRss = memory.rss;
             memoryRssString = ConvertToMBString(memoryRss);
+
+            memoryPeakRssString = "Peak:" + ConvertToMBString(peakMemory);
 
             if (adapter != null)
             {
@@ -575,25 +582,27 @@ namespace GCMonitor
             if (!showUI)
                 return;
 
-            long newdisplayMaxMemory = (long) displayMaxMemory;
-            long newdisplayMinMemory = (long) displayMinMemory;
+            long newdisplayMaxMemory = displayMaxMemory;
+            long newdisplayMinMemory = displayMinMemory;
 
             if (fullUpdate)
             {
                 newdisplayMaxMemory = newdisplayMinMemory = 0;
             }
 
-            maxMemory = 0;
+            long maxMemory = 0;
             long minMemory = 0;
             for (int i = 0; i < memoryHistory.Length; i++)
             {
                 long mem = realMemory ? (long)memoryHistory[i].rss : (gpuMemory ? memoryHistory[i].gpu : memoryHistory[i].max);
+
                 if (relative)
                 {
                     int index = i != 0 ? (i - 1) : memoryHistory.Length - 1;
                     long pmem = realMemory ? (long)memoryHistory[index].rss : (gpuMemory ? memoryHistory[index].gpu : memoryHistory[index].max);
                     mem = pmem == 0 ? 0 : mem - pmem;
                 }
+                
                 if (mem > maxMemory)
                     maxMemory = mem;
                 if (mem < minMemory)
@@ -798,7 +807,11 @@ namespace GCMonitor
             if (mem > memoryHistory[activeSecond].max)
                 memoryHistory[activeSecond].max = mem;
 
-            memoryHistory[activeSecond].rss = getProcessMemory().vsz;
+            ulong rss = getProcessMemory().vsz;
+            memoryHistory[activeSecond].rss = rss;
+
+            if (rss > peakMemory)
+                peakMemory = rss;
 
             if (adapter != null)
             {
@@ -967,6 +980,12 @@ namespace GCMonitor
                     fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
                 }
 
+                if (displayPeakRss)
+                {
+                    DrawOutline(fpsPos, memoryPeakRssString, 1, fpsLabelStyle, Color.black, Color.white);
+                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
+                }
+
                 if (displayGpu)
                 {
                     DrawOutline(fpsPos, gpuMemoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
@@ -1059,7 +1078,7 @@ namespace GCMonitor
 
             processMemory mem = getProcessMemory();
 
-            GUILayout.Label("KSP: " + ConvertToKBString(mem.vsz) + " / " + ConvertToKBString(mem.max), GUILayout.ExpandWidth(false));
+            GUILayout.Label("KSP: " + ConvertToKBString(mem.vsz) + " / " + ConvertToKBString(maxAllowedMem), GUILayout.ExpandWidth(false));
             if (adapter != null)
                 GUILayout.Label("GPU: " + ConvertToKBString(adapter.DedicatedVramUsage) + " / " + ConvertToKBString(adapter.DedicatedVramLimit), GUILayout.ExpandWidth(false));
 
@@ -1126,6 +1145,7 @@ namespace GCMonitor
             displayFps = GUILayout.Toggle(displayFps, "FPS");
             displayMem = GUILayout.Toggle(displayMem, "Memory");
             displayMemRss = GUILayout.Toggle(displayMemRss, "Memory (RSS)");
+            displayPeakRss = GUILayout.Toggle(displayPeakRss, "Peak");
             GUILayout.EndHorizontal();
 
             displayGpu = adapter != null && GUILayout.Toggle(displayGpu, "Memory (GPU)");
