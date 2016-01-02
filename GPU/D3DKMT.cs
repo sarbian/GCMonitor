@@ -13,22 +13,8 @@ namespace GCMonitor
     public struct D3DKMT_ENUMADAPTERS
     {
         public UInt32 NumAdapters;
-        public D3DKMT_ADAPTERINFO Adapter1;
-        public D3DKMT_ADAPTERINFO Adapter2;
-        public D3DKMT_ADAPTERINFO Adapter3;
-        public D3DKMT_ADAPTERINFO Adapter4;
-        public D3DKMT_ADAPTERINFO Adapter5;
-        public D3DKMT_ADAPTERINFO Adapter6;
-        public D3DKMT_ADAPTERINFO Adapter7;
-        public D3DKMT_ADAPTERINFO Adapter8;
-        public D3DKMT_ADAPTERINFO Adapter9;
-        public D3DKMT_ADAPTERINFO Adapter10;
-        public D3DKMT_ADAPTERINFO Adapter11;
-        public D3DKMT_ADAPTERINFO Adapter12;
-        public D3DKMT_ADAPTERINFO Adapter13;
-        public D3DKMT_ADAPTERINFO Adapter14;
-        public D3DKMT_ADAPTERINFO Adapter15;
-        public D3DKMT_ADAPTERINFO Adapter16;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+        public D3DKMT_ADAPTERINFO[] Adapters;
     }
 
     [StructLayout(LayoutKind.Sequential)]
