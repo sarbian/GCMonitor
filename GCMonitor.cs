@@ -227,7 +227,7 @@ namespace GCMonitor
 
             GetProcessMemoryInfo(new IntPtr(-1), pmc, Marshal.SizeOf(typeof(PROCESS_MEMORY_COUNTERS)));  
 
-            return new processMemory((ulong) pmc.WorkingSetSize, msex.ullTotalVirtual - msex.ullAvailVirtual, msex.ullTotalVirtual);
+            return new processMemory(pmc.WorkingSetSize, msex.ullTotalVirtual - msex.ullAvailVirtual, msex.ullTotalVirtual);
         }
         
         // next struct and method from https://github.com/dotnet/corefx/blob/master/src/Common/src/Interop/Linux/procfs/Interop.ProcFsStat.cs
@@ -447,7 +447,6 @@ namespace GCMonitor
             spaceFormat.NumberGroupSeparator = " ";
 
             Debug.Log("[GCMonitor] Setting up getRSS delegates");
-            Debug.Log(Environment.CurrentDirectory.ToString());
             switch (Application.platform)
             {
                 case RuntimePlatform.LinuxPlayer:
@@ -477,7 +476,7 @@ namespace GCMonitor
             }
             catch (Exception e)
             {
-                Debug.Log("[GCMonitor] Unable to find getRSS implementation\n" + e.ToString());
+                Debug.Log("[GCMonitor] Unable to find getRSS implementation\n" + e);
                 getProcessMemory = getProcessMemory_unimplemented;
             }
 
@@ -556,7 +555,7 @@ namespace GCMonitor
             memoryRss = memory.rss;
             memoryRssString = ConvertToMBString(memoryRss);
 
-            memoryPeakRssString = "Peak:" + ConvertToMBString(peakMemory);
+            memoryPeakRssString = ConvertToMBString(peakMemory);
 
             if (adapter != null)
             {
@@ -1146,6 +1145,8 @@ namespace GCMonitor
             displayMem = GUILayout.Toggle(displayMem, "Memory");
             displayMemRss = GUILayout.Toggle(displayMemRss, "Memory (RSS)");
             displayPeakRss = GUILayout.Toggle(displayPeakRss, "Peak");
+            if (displayPeakRss)
+                OnlyUpdateWhenDisplayed = true;
             GUILayout.EndHorizontal();
 
             displayGpu = adapter != null && GUILayout.Toggle(displayGpu, "Memory (GPU)");
@@ -1235,7 +1236,7 @@ namespace GCMonitor
 
         public new static void print(object message)
         {
-            MonoBehaviour.print("[GCMonitor] " + message.ToString());
+            MonoBehaviour.print("[GCMonitor] " + message);
         }
         
         public void InitGpuMonitor()
@@ -1318,7 +1319,6 @@ namespace GCMonitor
                 }
                 private set
                 {
-                    if (value == _DedicatedVramLimit) return;
                     _DedicatedVramLimit = value;
                 }
             }
@@ -1327,7 +1327,6 @@ namespace GCMonitor
                 get { return _SharedVramLimit; }
                 private set
                 {
-                    if (value == _SharedVramLimit) return;
                     _SharedVramLimit = value;
                 }
             }
@@ -1336,7 +1335,6 @@ namespace GCMonitor
                 get { return _DedicatedVramUsage; }
                 private set
                 {
-                    if (value == _DedicatedVramUsage) return;
                     _DedicatedVramUsage = value;
                 }
             }
@@ -1345,7 +1343,6 @@ namespace GCMonitor
                 get { return _SharedVramUsage; }
                 private set
                 {
-                    if (value == _SharedVramUsage) return;
                     _SharedVramUsage = value;
                 }
             }
@@ -1401,7 +1398,7 @@ namespace GCMonitor
                             }
                             else
                             {
-                                bytesCommitted = (UInt64)queryStatistics.QueryResult.SegmentInformation.BytesCommitted;
+                                bytesCommitted = queryStatistics.QueryResult.SegmentInformation.BytesCommitted;
                                 commitLimit = queryStatistics.QueryResult.SegmentInformationV1.CommitLimit;
                                 aperture = queryStatistics.QueryResult.SegmentInformationV1.Aperture;
                             }

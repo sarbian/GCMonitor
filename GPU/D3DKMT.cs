@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-
 namespace GCMonitor
 {
     #region struct
@@ -344,7 +343,7 @@ namespace GCMonitor
             //Contract.Requires(PreservedDuringStandby < 0x2);
             //Contract.Requires(PreservedDuringHibernate < 0x2);
             //Contract.Requires(PartiallyPreservedDuringHibernate < 0x2);
-            raw = (ulong)PreservedDuringStandby | (ulong)(PreservedDuringHibernate << 2) | (ulong)(PartiallyPreservedDuringHibernate << 4) | (ulong)(Reserved << 66);
+            raw = PreservedDuringStandby | (ulong)(PreservedDuringHibernate << 2) | (ulong)(PartiallyPreservedDuringHibernate << 4) | (ulong)(Reserved << 66);
         }
     }
 
@@ -443,7 +442,7 @@ namespace GCMonitor
         [FieldOffset(0), MarshalAs(UnmanagedType.Struct)]
         public D3DKMT_QUERYSTATISTICS_ADAPTER_INFORMATION AdapterInformation;
     }
-    [StructLayoutAttribute(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Explicit)]
     public struct D3DKMT_QUERYSTATISTICS_QUERY_UNION
     {
         [FieldOffset(0)]
@@ -460,12 +459,12 @@ namespace GCMonitor
         public D3DKMT_QUERYSTATISTICS_QUERY_VIDPNSOURCE QueryProcessVidPnSource;
     }
 
-    [System.Runtime.InteropServices.StructLayoutAttribute(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential)]
     public struct D3DKMT_QUERYSTATISTICS
     {
         public D3DKMT_QUERYSTATISTICS_TYPE Type;
         public LUID AdapterLuid;
-        public System.IntPtr hProcess;
+        public IntPtr hProcess;
         public D3DKMT_QUERYSTATISTICS_RESULT QueryResult;
         public D3DKMT_QUERYSTATISTICS_QUERY_UNION QueryUnion;
     }
