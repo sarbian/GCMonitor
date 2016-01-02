@@ -1228,23 +1228,38 @@ namespace GCMonitor
             {
                 print("Getting Adapters info");
 
-                D3DKMT_ENUMADAPTERS adapters = new D3DKMT_ENUMADAPTERS();
+                D3DKMT_ENUMADAPTERS d3DkmtEnumadapters = new D3DKMT_ENUMADAPTERS();
 
-                IntPtr adaptersPtr = Marshal.AllocHGlobal(Marshal.SizeOf(adapters)); //Allocate unmanaged Memory
-                Marshal.StructureToPtr(adapters, adaptersPtr, true);
+                IntPtr dkmtEnumadapters = Marshal.AllocHGlobal(Marshal.SizeOf(d3DkmtEnumadapters)); //Allocate unmanaged Memory
+                Marshal.StructureToPtr(d3DkmtEnumadapters, dkmtEnumadapters, true);
 
-                if (D3DKMT.Nt_Success(D3DKMT.D3DKMTEnumAdapters(adaptersPtr)))
+                if (D3DKMT.Nt_Success(D3DKMT.D3DKMTEnumAdapters(dkmtEnumadapters)))
                 {
-                    adapters =
-                        (D3DKMT_ENUMADAPTERS) Marshal.PtrToStructure(adaptersPtr, typeof (D3DKMT_ENUMADAPTERS));
-                    uint segmentCount = adapters.NumAdapters;
+                    d3DkmtEnumadapters =
+                        (D3DKMT_ENUMADAPTERS) Marshal.PtrToStructure(dkmtEnumadapters, typeof (D3DKMT_ENUMADAPTERS));
+                    
+                    print("Got " + d3DkmtEnumadapters.Adapters.Length + " adapters");
 
-                    print("Got " + segmentCount + " adapters");
 
-                    adapter = new Adapter(adapters.Adapter1.AdapterLuid, "GPU1");
+                    // We look for the adapter with the highest memory Usage and hope this is the one we want
+
+                    long max = 0;
+                    for (int i = 0; i < d3DkmtEnumadapters.Adapters.Length; i++)
+                    {
+                        Adapter a = new Adapter(d3DkmtEnumadapters.Adapters[i].AdapterLuid, "GPU" + i);
+
+                        a.UpdateValues();
+
+                        if (a.DedicatedVramUsage > max)
+                        {
+                            max = a.DedicatedVramUsage;
+                            adapter = a;
+                        }
+                    }
                 }
+                print("Selected " + adapter.Description + " as our main adapter");
 
-                Marshal.FreeHGlobal(adaptersPtr);
+                Marshal.FreeHGlobal(dkmtEnumadapters);
             }
             catch
             {
@@ -1267,9 +1282,9 @@ namespace GCMonitor
             Windows_2008_R2 = 6001,
             Windows_8 = 6002,
         }
-
-        public Adapter adapter;
-
+        
+        private Adapter adapter;
+        
         public class Adapter
         {
             private static int WinVersion_Current = Environment.OSVersion.Version.Major * 1000 + Environment.OSVersion.Version.Minor;
