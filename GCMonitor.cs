@@ -1217,13 +1217,9 @@ namespace GCMonitor
         {
             MonoBehaviour.print("[GCMonitor] " + message.ToString());
         }
-
-
-        private static int WinVersion_Current = Environment.OSVersion.Version.Major * 1000 + Environment.OSVersion.Version.Minor;
-
+        
         public void InitGpuMonitor()
         {
-
             try
             {
                 print("Getting Adapters info");
@@ -1238,11 +1234,7 @@ namespace GCMonitor
                     d3DkmtEnumadapters =
                         (D3DKMT_ENUMADAPTERS) Marshal.PtrToStructure(dkmtEnumadapters, typeof (D3DKMT_ENUMADAPTERS));
                     
-                    print("Got " + d3DkmtEnumadapters.Adapters.Length + " adapters");
-
-
-                    // We look for the adapter with the highest memory Usage and hope this is the one we want
-
+                    // Look for the adapter with the highest memory Usage and hope this is the one we want
                     long max = 0;
                     for (int i = 0; i < d3DkmtEnumadapters.Adapters.Length; i++)
                     {
@@ -1288,32 +1280,16 @@ namespace GCMonitor
         public class Adapter
         {
             private static int WinVersion_Current = Environment.OSVersion.Version.Major * 1000 + Environment.OSVersion.Version.Minor;
-
             
-            private DateTime lastUpdated;
             private long oldTotalRunningTime;
-            //private int memoryOffset;
             #region Properties
             public LUID Luid { get; private set; }
             public string Description { get; private set; }
             private long _SharedVramUsage;
             private long _DedicatedVramUsage;
             private long _SharedVramLimit;
-            private int _Usage;
             private long _DedicatedVramLimit;
-            public int Usage
-            {
-                get
-                {
-                    return _Usage;
-                }
-                private set
-                {
-                    if (value == _Usage) return;
-                    if (value > 100) value = 100;
-                    _Usage = value;
-                }
-            }
+            
             public long DedicatedVramLimit
             {
                 get
@@ -1366,7 +1342,6 @@ namespace GCMonitor
             public void UpdateValues()
             {
                 //Check for Video Memory
-                uint NodeCount = 0;
                 D3DKMT_QUERYSTATISTICS queryStatistics = new D3DKMT_QUERYSTATISTICS();
                 queryStatistics.Type = D3DKMT_QUERYSTATISTICS_TYPE.D3DKMT_QUERYSTATISTICS_ADAPTER;
                 queryStatistics.AdapterLuid = Luid;
@@ -1374,10 +1349,8 @@ namespace GCMonitor
                 Marshal.StructureToPtr(queryStatistics, queryStatisticsPtr, true);
                 if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics(queryStatisticsPtr)))
                 {
-
                     queryStatistics = (D3DKMT_QUERYSTATISTICS)Marshal.PtrToStructure(queryStatisticsPtr, typeof(D3DKMT_QUERYSTATISTICS));
                     uint segmentCount = queryStatistics.QueryResult.AdapterInformation.NbSegments;
-                    NodeCount = queryStatistics.QueryResult.AdapterInformation.NodeCount;
 
                     ulong GpuSharedLimit = 0;
                     ulong GpuDedicatedLimit = 0;
@@ -1429,36 +1402,9 @@ namespace GCMonitor
                     DedicatedVramLimit = (long)GpuDedicatedLimit;
                     SharedVramUsage = (long)GpuSharedBytesUsed;
                     SharedVramLimit = (long)GpuSharedLimit;
-
-                    /*
-                    System.Diagnostics.Debug.WriteLine("SharedUsage " + (GpuSharedBytesUsed * 9.53674316e-7) + "Mb; DedicatedUsage " + (GpuDedicatedBytesUsed * 9.53674316e-7) + "Mb");
-                    System.Diagnostics.Debug.WriteLine("SharedLimit " + GpuSharedLimit * 9.53674316e-7 + "Mb; DedicatedLimit " + GpuDedicatedLimit * 9.53674316e-7 + "Mb");
-                    */
                 }
 
-                //Check for GPU Usage
-                long totalRunningTime = 0;
-
-                for (uint i = 0; i < NodeCount; i++)
-                {
-                    queryStatistics = new D3DKMT_QUERYSTATISTICS();
-                    queryStatistics.Type = D3DKMT_QUERYSTATISTICS_TYPE.D3DKMT_QUERYSTATISTICS_NODE;
-                    queryStatistics.AdapterLuid = Luid;
-                    queryStatistics.QueryUnion.QueryNode.NodeId = i;
-                    Marshal.StructureToPtr(queryStatistics, queryStatisticsPtr, true);
-                    if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics(queryStatisticsPtr)))
-                    {
-                        queryStatistics = (D3DKMT_QUERYSTATISTICS)Marshal.PtrToStructure(queryStatisticsPtr, typeof(D3DKMT_QUERYSTATISTICS));
-                        totalRunningTime += queryStatistics.QueryResult.NodeInformation.GlobalInformation.RunningTime.QuadPart;
-                    }
-                }
                 Marshal.FreeHGlobal(queryStatisticsPtr); //Free Allocated Memory
-
-                long totalRunningTimeDelta = totalRunningTime - oldTotalRunningTime;
-                Usage = (int)((double)totalRunningTimeDelta / ((DateTime.Now - lastUpdated).Milliseconds * 100));
-
-                oldTotalRunningTime = totalRunningTime;
-                lastUpdated = DateTime.Now;
             }
             #endregion
         }
