@@ -186,14 +186,14 @@ namespace GCMonitor
         {
             public uint cb;
             public uint PageFaultCount;
-            public uint PeakWorkingSetSize;
-            public uint WorkingSetSize;
-            public uint QuotaPeakPagedPoolUsage;
-            public uint QuotaPagedPoolUsage;
-            public uint QuotaPeakNonPagedPoolUsage;
-            public uint QuotaNonPagedPoolUsage;
-            public uint PagefileUsage;
-            public uint PeakPagefileUsage;
+            public UIntPtr PeakWorkingSetSize;
+            public UIntPtr WorkingSetSize;
+            public UIntPtr QuotaPeakPagedPoolUsage;
+            public UIntPtr QuotaPagedPoolUsage;
+            public UIntPtr QuotaPeakNonPagedPoolUsage;
+            public UIntPtr QuotaNonPagedPoolUsage;
+            public UIntPtr PagefileUsage;
+            public UIntPtr PeakPagefileUsage;
         }
 
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -225,9 +225,8 @@ namespace GCMonitor
         {
             GlobalMemoryStatusEx(msex);
 
-            GetProcessMemoryInfo(new IntPtr(-1), pmc, Marshal.SizeOf(typeof(PROCESS_MEMORY_COUNTERS)));  
-
-            return new processMemory(pmc.WorkingSetSize, msex.ullTotalVirtual - msex.ullAvailVirtual, msex.ullTotalVirtual);
+            GetProcessMemoryInfo(new IntPtr(-1), pmc, Marshal.SizeOf(typeof(PROCESS_MEMORY_COUNTERS)));
+            return new processMemory(pmc.WorkingSetSize.ToUInt64(), msex.ullTotalVirtual - msex.ullAvailVirtual, msex.ullTotalVirtual);
         }
         
         // next struct and method from https://github.com/dotnet/corefx/blob/master/src/Common/src/Interop/Linux/procfs/Interop.ProcFsStat.cs
@@ -481,9 +480,10 @@ namespace GCMonitor
             }
 
             
-            maxAllowedMem = IsX64() ? (ulong) (SystemInfo.systemMemorySize << 20) : uint.MaxValue;
+            maxAllowedMem = IsX64() ?  ((ulong)SystemInfo.systemMemorySize) << 20 : uint.MaxValue;
 
-            if (Application.platform == RuntimePlatform.WindowsPlayer && getProcessMemory().max != 0)
+            
+            if (!IsX64() && Application.platform == RuntimePlatform.WindowsPlayer && getProcessMemory().max != 0)
             {
                 maxAllowedMem = getProcessMemory().max;
                 Debug.Log("[GCMonitor] Maximum usable memoryVsz " + ConvertToGBString(maxAllowedMem) + " / " + ConvertToMBString(maxAllowedMem));
@@ -555,6 +555,8 @@ namespace GCMonitor
             memoryRss = memory.rss;
             memoryRssString = ConvertToMBString(memoryRss);
 
+            if (memoryVsz > peakMemory)
+                peakMemory = memoryVsz;
             memoryPeakRssString = ConvertToMBString(peakMemory);
 
             if (adapter != null)
@@ -1197,7 +1199,7 @@ namespace GCMonitor
 
         static String ConvertToMBString(long bytes)
         {
-            return (bytes / 1024 / 1024).ToString("#,0", spaceFormat) + " MB";
+            return (bytes / 1024f / 1024f).ToString("#,0", spaceFormat) + " MB";
         }
 
         static String ConvertToMBString(ulong bytes)
@@ -1207,7 +1209,7 @@ namespace GCMonitor
 
         static String ConvertToKBString(long bytes)
         {
-            return (bytes / 1024).ToString("#,0", spaceFormat) + " kB";
+            return (bytes / 1024f).ToString("#,0", spaceFormat) + " kB";
         }
 
         static String ConvertToKBString(ulong bytes)
