@@ -471,7 +471,6 @@ namespace GCMonitor
             try
             {
                 processMemory p = getProcessMemory();
-                Debug.Log("[GCMonitor] Delegates OK " + ConvertToMBString(p.vsz) + " / " + ConvertToMBString(p.max));
             }
             catch (Exception e)
             {
