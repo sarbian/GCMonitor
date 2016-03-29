@@ -23,12 +23,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
 using KSP.IO;
+using KSP.UI;
+using KSP.UI.Screens;
+using KSPAssets;
+using KSPAssets.Loaders;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using UnityEngine.UI.Extensions;
+//using UnityEngine.UI.Extensions;
 using Debug = UnityEngine.Debug;
 using Resources = GCMonitor.Properties.Resources;
 
@@ -40,12 +50,12 @@ namespace GCMonitor
         private const int width = 1024;
         private const int height = 512;
 
-        const int GraphLabels = 4;
-        const float labelSpace = 20f * (GraphLabels + 1) / GraphLabels; //fraction because we add Space 1 less time than we draw a Label
+        const int GraphLabelsCount = 4;
+        const float labelSpace = 20f * (GraphLabelsCount + 1) / GraphLabelsCount; //fraction because we add Space 1 less time than we draw a Label
 
         private Rect windowPos = new Rect(80, 80, 400, 200);
         private Rect windowConfigPos = new Rect(80 + 410, 80, 200, 100);
-        private Rect fpsPos = new Rect(10, 200, 80, 50);
+        
         private bool showUI = false;
         private bool showConfUI = false;
 
@@ -89,41 +99,86 @@ namespace GCMonitor
         double alertPercent = 0.95d;
 
         [Persistent]
-        int fpsSize = 10;
+        int fpsSize = 30;
 
         [Persistent]
         bool displayMem = true;
 
         [Persistent]
-        bool displayMemRss = false;
+        bool displayMemRss = true;
 
         [Persistent]
         bool displayPeakRss = false;
 
         [Persistent]
-        bool displayGpu = true;
+        bool displayGpu = false;
 
         [Persistent]
         bool displayFps = true;
 
+        int CountersX
+        {
+            get { return HighLogic.LoadedSceneIsEditor ? fpsXEditor : fpsX; }
+            set
+            {
+                if (HighLogic.LoadedSceneIsEditor)
+                {
+                    fpsXEditor = value;
+                }
+                else
+                {
+                    fpsX = value;
+                }
+            }
+        }
+
+        int CountersY
+        {
+            get { return HighLogic.LoadedSceneIsEditor ? fpsYEditor : fpsY; }
+            set
+            {
+                if (HighLogic.LoadedSceneIsEditor)
+                {
+                    fpsYEditor = value;
+                }
+                else
+                {
+                    fpsY = value;
+                }
+            }
+        }
+
         [Persistent]
-        float fpsX = 10;
+        int fpsX = 10;
         [Persistent]
-        float fpsY = 200;
+        int fpsY = 200;
+
+        [Persistent]
+        int fpsXEditor = 10;
+        [Persistent]
+        int fpsYEditor = 200;
 
         private IButton tbButton;
         private ApplicationLauncherButton alButton;
+
+        private RectTransform panelPos;
+//        private Canvas countersCanvas;
+        private Text memVszText;
+        private Text memRssText;
+        private Text memPeakRssText;
+        private Text memGpuText;
+        private Text memFpsText;
 
         long displayMaxMemory = 200;
         long displayMinMemory = 0;
         static ulong peakMemory;
         long topMemory;
+       
+        public float updateInterval = 0.25f;
+        private float accum = 0; // FPS accumulated over the interval
+        private int frames = 0; // Frames drawn over the interval
+        private float timeleft; // Left time for current interval
 
-        private readonly float updateInterval = 4;
-
-        private float dt = 0;
-        private int frameCount = 0;
-        private float updateRate;
         private float fps;
         private string fpsString = string.Empty;
 
@@ -425,11 +480,7 @@ namespace GCMonitor
                 ConfigNode config = ConfigNode.Load(IOUtils.GetFilePathFor(this.GetType(), "GCMonitor.cfg"));
                 ConfigNode.LoadObjectFromConfig(this, config);
             }
-
-            fpsPos.Set(fpsX, fpsY, 200, 50);
-
-            updateRate = updateInterval;
-
+            
             line = new Color[height];
             blackLine = new Color[height];
             for (int i = 0; i < blackLine.Length; i++)
@@ -527,41 +578,776 @@ namespace GCMonitor
             ALERT2
         }
 
+
+        internal void Start()
+        {
+            print("Start - Creating UI");
+
+            //UItests();
+            //
+            //if (countersCanvas == null)
+            //{
+            //    UICreateCounters();
+            //
+            //    window = addWindow(UIMasterController.Instance.appCanvas.gameObject, "MyWindow");
+            //}
+        }
+
+        private void UItests()
+        {
+            Canvas uiCanvas = UIMasterController.Instance.appCanvas;
+
+            print(uiCanvas.renderMode);
+            print(uiCanvas.pixelPerfect);
+            print(uiCanvas.sortingLayerID);
+            print(uiCanvas.sortingLayerName);
+            print(uiCanvas.renderOrder);
+            print(uiCanvas.scaleFactor);
+
+            print("Camera");
+            print(uiCanvas.worldCamera);
+            print(uiCanvas.worldCamera.transform.position);
+            print(uiCanvas.worldCamera.orthographic);
+            print(uiCanvas.worldCamera.pixelRect);
+            print(uiCanvas.worldCamera.orthographicSize);
+
+
+            GameObject camh = uiCanvas.worldCamera.gameObject;
+
+            print("Camera Hierarchy Start");
+            while (camh.transform.parent != null)
+            {
+                print("Parent " + camh.GetType().FullName + " / " + camh.name + " " + camh.transform.position);
+                camh = camh.transform.parent.gameObject;
+            }
+            print("Camera Hierarchy End");
+
+
+
+            print("RectTransform");
+            RectTransform cr = uiCanvas.GetComponent<RectTransform>();
+            print("localPosition    " + cr.localPosition);
+            print("localScale       " + cr.localScale);
+            print("anchorMin        " + cr.anchorMin);
+            print("anchorMax        " + cr.anchorMax);
+            print("anchoredPosition " + cr.anchoredPosition);
+            print("sizeDelta        " + cr.sizeDelta);
+            print("pivot            " + cr.pivot);
+
+
+            print(cr.rect);
+            print(cr.anchoredPosition3D);
+
+
+            print("Component listing");
+            var comps = uiCanvas.GetComponents<Component>();
+            foreach (Component component in comps)
+            {
+                print(component.GetType().Name);
+            }
+
+            print("Child Listing");
+            var parent = uiCanvas.gameObject.transform.parent;
+            if (parent == null)
+            {
+                print("No parent");
+            }
+            else
+            {
+                int children = parent.transform.childCount;
+                for (int i = 0; i < children; ++i)
+                    print("For loop: " + parent.transform.GetChild(i));
+            }
+
+            GameObject o = uiCanvas.gameObject;
+
+            print("Hierarchy Start");
+            while (o.transform.parent != null)
+            {
+                print("Parent " + o.GetType().FullName + " / " + o.name + " " + o.transform.position);
+                o = o.transform.parent.gameObject;
+            }
+            print("Hierarchy End");
+
+            foreach (var c in uiCanvas.gameObject.GetComponents<Component>())
+            {
+                print(c.GetType().Name);
+            }
+
+            print("CanvasScaler");
+            var s = uiCanvas.gameObject.GetComponent<CanvasScaler>();
+            print(s.uiScaleMode);
+            print(s.scaleFactor);
+            print(s.referencePixelsPerUnit);
+            print(s.screenMatchMode);
+            
+        }
+
+        private void UICreateCounters()
+        {
+            panelPos = addEmptyPanel(UIMasterController.Instance.appCanvas.gameObject);
+            panelPos.localPosition = new Vector3(-Screen.width >> 1, Screen.height >> 1, 0);
+            panelPos.sizeDelta = new Vector2(100, 100);
+            panelPos.anchorMin = new Vector2(0, 1);
+            panelPos.anchorMax = new Vector2(0, 1);
+            panelPos.pivot = new Vector2(0, 1);
+            panelPos.localScale = new Vector3(1, 1, 1);
+
+            var cg = panelPos.gameObject.AddComponent<CanvasGroup>();
+            cg.blocksRaycasts = false;
+
+            var layout = panelPos.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.childAlignment = TextAnchor.UpperLeft;
+            layout.childForceExpandHeight = true;
+            layout.childForceExpandWidth = true;
+
+            var csf = panelPos.gameObject.AddComponent<ContentSizeFitter>();
+            csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            memVszText = addTextOutline(panelPos.gameObject, "Mem");
+            memRssText = addTextOutline(panelPos.gameObject, "MemRss");
+            memPeakRssText = addTextOutline(panelPos.gameObject, "PeakRss");
+            memGpuText = addTextOutline(panelPos.gameObject, "Gpu");
+            memFpsText = addTextOutline(panelPos.gameObject, "Fps");
+        }
+
+        private static Text addTextOutline(GameObject parent, string s)
+        {
+            GameObject text1Obj = new GameObject("Text");
+
+            text1Obj.layer = LayerMask.NameToLayer("UI");
+
+            RectTransform trans = text1Obj.AddComponent<RectTransform>();
+            trans.localScale = new Vector3(1, 1, 1);
+            trans.localPosition.Set(0, 0, 0);
+            
+            Text text = text1Obj.AddComponent<Text>();
+            text.supportRichText = true;
+            text.text = s;
+            text.fontSize = 24;
+            text.font = UISkinManager.defaultSkin.font;
+
+            text.alignment = TextAnchor.UpperLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.color = Color.white;
+            text1Obj.transform.SetParent(parent.transform, false);
+
+            NicerOutline outline = text1Obj.AddComponent<NicerOutline>();
+            outline.effectColor = Color.black;
+            
+            return text;
+        }
+
+
+        private static Text addText(GameObject parent, string s)
+        {
+            GameObject text1Obj = new GameObject("Text");
+
+            text1Obj.layer = LayerMask.NameToLayer("UI");
+
+            RectTransform trans = text1Obj.AddComponent<RectTransform>();
+            trans.anchorMin = new Vector2(0, 0);
+            trans.anchorMax = new Vector2(1, 1);
+            trans.localScale = new Vector3(1, 1, 1);
+            trans.localPosition.Set(0, 0, 0);
+
+            Text text = text1Obj.AddComponent<Text>();
+            text.supportRichText = true;
+            text.text = s;
+            text.fontSize = 18;
+            text.resizeTextForBestFit = false;
+            text.font = UISkinManager.defaultSkin.font;
+
+            text.alignment = TextAnchor.UpperLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.color = Color.white;
+            text1Obj.transform.SetParent(parent.transform, false);
+            return text;
+        }
+
+        private RectTransform addWindow(GameObject parent, string title)
+        {
+            float width = 150;
+            float height = 200;
+            float headerHeight = 40;
+
+            // The whole window
+            RectTransform window = addEmptyPanel(parent);
+            window.localPosition = new Vector3(0, 0, 0);
+            window.sizeDelta = new Vector2(width, height);
+            window.anchorMin = new Vector2(0, 1);
+            window.anchorMax = new Vector2(0, 1);
+            window.pivot = new Vector2(0, 1);
+
+            var image = window.gameObject.AddComponent<Image>();
+            //image.color = new Color(0f, 0.5f, 0f, 1);
+            image.sprite = UISkinManager.defaultSkin.window.normal.background;
+            image.fillCenter = false;
+            
+            var csf = window.gameObject.AddComponent<ContentSizeFitter>();
+            csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var vlg = window.gameObject.AddComponent<VerticalLayoutGroup>();
+            vlg.childAlignment = TextAnchor.UpperLeft;
+            vlg.childForceExpandHeight = true;
+            vlg.childForceExpandWidth = true;
+
+            var le = window.gameObject.AddComponent<LayoutElement>();
+            // Set the min size of the window
+            le.minWidth = width; 
+            le.minHeight = height;
+            // this would set a max size
+            //le.preferredWidth = width;
+            //le.preferredHeight = height;
+            
+            // The Header
+            RectTransform header = addEmptyPanel(window.gameObject);
+            // Stretch to parent width
+            header.anchorMin = new Vector2(0, 1);
+            header.anchorMax = new Vector2(1, 1);
+            header.pivot = new Vector2(0, 1);
+            
+            header.sizeDelta = new Vector2(0, headerHeight);
+            header.localPosition = new Vector2(0, 0);
+            
+            //var image2 = header.gameObject.AddComponent<Image>();
+            ////image2.color = new Color(1, 1, 1, 0.5f);
+            //image2.sprite = UISkinManager.defaultSkin.window.normal.background;
+
+            var leh = header.gameObject.AddComponent<LayoutElement>();
+            leh.minHeight = headerHeight;
+            leh.preferredHeight = headerHeight;
+
+            GameObject textHeaderObj = new GameObject("Text");
+            textHeaderObj.layer = LayerMask.NameToLayer("UI");
+
+            RectTransform trans = textHeaderObj.AddComponent<RectTransform>();
+            trans.anchorMin = new Vector2(0.5f, 0.5f);
+            trans.anchorMax = new Vector2(0.5f, 0.5f);
+            trans.pivot = new Vector2(0.5f, 0.5f);
+            
+            Text text = textHeaderObj.AddComponent<Text>();
+            text.supportRichText = true;
+            text.text = title;
+            text.fontSize = 14;
+            text.resizeTextForBestFit = false;
+            text.font = UISkinManager.defaultSkin.font;
+
+            text.alignment = TextAnchor.MiddleCenter;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.resizeTextForBestFit = true;
+            text.color = Color.white;
+            textHeaderObj.transform.SetParent(header.transform, false);
+
+            // The Content
+            RectTransform content = addEmptyPanel(window.gameObject);
+            // Stretch to parent size
+            content.anchorMin = new Vector2(0, 0);
+            content.anchorMax = new Vector2(1, 1);
+            content.pivot = new Vector2(0, 1);
+            content.sizeDelta = new Vector2(0, -headerHeight);
+            content.anchoredPosition = new Vector2(0, -headerHeight);
+
+            //var image3 = content.gameObject.AddComponent<Image>();
+            //image3.color = new Color(0,0,1,0.5f);
+            
+            var drag = header.gameObject.AddComponent<DragHandler>();
+
+            drag.AddEvents(OnInitializePotentialDrag, OnBeginDrag, OnDrag, OnEndDrag);
+
+            var layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.childAlignment = TextAnchor.UpperLeft;
+            layout.childForceExpandHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.padding = new RectOffset(15, 15, 15, 15);
+            layout.spacing = 2;
+
+            addText(content.gameObject, "Text1");
+            addText(content.gameObject, "Text2");
+            addText(content.gameObject, "Text3ThatIsVeryLong");
+            addText(content.gameObject, "Text4EvenLongerThanTheVeryLongText");
+            addText(content.gameObject, "Text5");
+            addText(content.gameObject, "Text6");
+            addText(content.gameObject, "Text7");
+            addText(content.gameObject, "Text8");
+            addText(content.gameObject, "Text9");
+            addText(content.gameObject, "Text9");
+            addText(content.gameObject, "Text9");
+            addText(content.gameObject, "Text9");
+            addText(content.gameObject, "Text9");
+            addText(content.gameObject, "Text9");
+
+            return window;
+        }
+
+        private RectTransform window;
+
+        private Vector2 originalLocalPointerPosition;
+        private Vector3 originalPanelLocalPosition;
+        
+        private void OnInitializePotentialDrag(PointerEventData e)
+        {
+            print("OnInitializePotentialDrag");
+            originalPanelLocalPosition = window.localPosition;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)window.parent.transform, e.position, e.pressEventCamera, out originalLocalPointerPosition);
+        }
+        
+        private void OnBeginDrag(PointerEventData e)
+        {
+            //print("onBeginDrag");
+        }
+
+        private void OnDrag(PointerEventData e)
+        {
+            Vector2 localPointerPosition;
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)window.parent.transform, e.position, e.pressEventCamera, out localPointerPosition))
+            {
+                Vector3 offsetToOriginal = localPointerPosition - originalLocalPointerPosition;
+                window.localPosition = originalPanelLocalPosition + offsetToOriginal;
+            }
+        }
+
+        private void OnEndDrag(PointerEventData e)
+        {
+            //print("onEndDrag");
+        }
+
+        private static RectTransform addEmptyPanel(GameObject parent)
+        {
+            GameObject panelObj = new GameObject(parent.name + "Panel");
+            panelObj.layer = LayerMask.NameToLayer("UI");
+
+            RectTransform panelRect = panelObj.AddComponent<RectTransform>();
+
+            // Top Left corner as base
+            panelRect.anchorMin = new Vector2(0, 1);
+            panelRect.anchorMax = new Vector2(0, 1);
+            panelRect.pivot = new Vector2(0, 1);
+            panelRect.localPosition = new Vector3(0, 0, 0);
+            panelRect.localScale = new Vector3(1, 1, 1);
+
+            panelObj.transform.SetParent(parent.transform, true);
+
+            return panelRect;
+        }
+
         private bool rmb;
         private bool lmb;
 
         private MemState activeMemState;
 
-        
-        public void Update()
-        {
-            frameCount++;
-            //dt += Time.timeScale / Time.deltaTime;
-            dt += Time.deltaTime;
 
-            if (dt > 1.0f / updateRate)
+
+        private RawImage graph;
+        private Text[] graphLabels;
+        private Text infoKSP;
+        private Text infoGPU;
+        private Text infoMono;
+        private Text infoFPS;
+        private Text precision;
+        private Text topLabel;
+        private UnityEngine.UI.Button precisionPlus;
+        private UnityEngine.UI.Button precisionMinus;
+        private Toggle toggleKSP;
+        private Toggle toggleGPU;
+        private Toggle toggleMono;
+        private Toggle toggleRelative;
+        private Toggle toggleColor;
+        private Toggle toggleUpdate;
+        private UnityEngine.UI.Button topButton;
+        private UnityEngine.UI.Button configButton;        
+
+        private Toggle toggleLauncher;
+        private Toggle toggleCounters;
+        private Toggle toggleCounterFPS;
+        private Toggle toggleCounterVSZ;
+        private Toggle toggleCounterRSS;
+        private Toggle toggleCounterPeak;
+        private Toggle toggleCounterGPU;
+
+        private Text counterSize;
+        private Text counterX;
+        private Text counterY;
+
+        private UnityEngine.UI.Button sizePlus;
+        private UnityEngine.UI.Button sizeMinus;
+
+        private UnityEngine.UI.Button xPlus;
+        private UnityEngine.UI.Button xMinus;
+
+        private UnityEngine.UI.Button yPlus;
+        private UnityEngine.UI.Button yMinus;
+
+        private UICollapsible configCollapsible;
+
+
+        private RectTransform prefabWindow;
+
+        // It seems the main menu unload all asset bundle after a couple of time
+        // So I rebuild my UI after a few seconds
+        void OnLevelWasLoaded()
+        {
+            if (HighLogic.LoadedScene != GameScenes.MAINMENU || !AssetLoader.Ready)
+                return;
+            print("OnLevelWasLoaded");
+            StartCoroutine(ReloadAfterSec(1));
+        }
+
+        private IEnumerator ReloadAfterSec(int time)
+        {
+            yield return new WaitForSeconds(time);
+            UILoad();
+        }
+
+        void UILoad()
+        {
+            if (!AssetLoader.Ready)
             {
-                fps = frameCount / dt;
-                fpsString = fps.ToString("##0.0") + " FPS";
-                frameCount = 0;
-                dt -= 1.0f / updateRate;
+                print("Asset Loader not ready");
+                return;
             }
 
-            processMemory memory = getProcessMemory();
-            memoryVsz = memory.vsz;
-            memoryVszString = ConvertToMBString(memoryVsz);
+            if (prefabWindow != null)
+            {
+                print("Killing Previous UI");
+                Destroy(prefabWindow.gameObject);
+            }
 
-            memoryRss = memory.rss;
-            memoryRssString = ConvertToMBString(memoryRss);
+            print("Asset bundles load");
+            var assetDefinition = AssetLoader.GetAssetDefinitionWithName("GCMonitor/gcmonitor", "Window");
+
+            print(AssetLoader.LoadAssets(UIInit, assetDefinition));
+        }
+
+
+        void UIInit(AssetLoader.Loader loader)
+        {
+            print("UIInit " + loader.definitions.Length + " defs");
+            for (int i = 0; i < loader.definitions.Length; i++)
+            {
+                UnityEngine.Object o = loader.objects[i];
+                if (o == null)
+                {
+                    print("Null def ??");
+                    continue;
+                }
+                
+                Type oType = o.GetType();
+
+                print("UIInit " + oType.Name + " " + o.name );
+
+                print("Asset bundles Instantiate");
+                GameObject go = Instantiate(o as GameObject);
+
+                // Set the parrent to the stock appCanvas
+                go.transform.SetParent(UIMasterController.Instance.appCanvas.transform, false);
+
+                prefabWindow = go.transform as RectTransform;
+
+                graph = go            .GetComponentInChild<RawImage>("Graph");
+                graphLabels = go .GetChild("Labels").GetComponentsInChildren<Text>();
+                infoKSP = go          .GetComponentInChild<Text>("KSP");
+                infoGPU = go          .GetComponentInChild<Text>("GPU");
+                infoMono = go         .GetComponentInChild<Text>("Mono");
+                infoFPS = go          .GetComponentInChild<Text>("FPS");
+                precision = go        .GetComponentInChild<Text>("PrecisionCurrent");
+                topLabel = go        .GetComponentInChild<Text>("TopLabel");
+                precisionPlus = go    .GetComponentInChild<UnityEngine.UI.Button>("PrecisionPlus");
+                precisionMinus = go   .GetComponentInChild<UnityEngine.UI.Button>("PrecisionMinus");
+                toggleKSP = go        .GetComponentInChild<Toggle>("ToggleKSP");
+                toggleGPU = go        .GetComponentInChild<Toggle>("ToggleGPU");
+                toggleMono = go       .GetComponentInChild<Toggle>("ToggleMono");
+                                       
+                toggleRelative = go   .GetComponentInChild<Toggle>("ToggleRelative");
+                toggleColor = go      .GetComponentInChild<Toggle>("ToggleColor");
+                toggleUpdate = go     .GetComponentInChild<Toggle>("ToggleUpdate");
+
+                topButton = go     .GetComponentInChild<UnityEngine.UI.Button>("TopButton");
+                configButton = go     .GetComponentInChild<UnityEngine.UI.Button>("ConfigButton");
+                                       
+                configCollapsible = go.GetComponentInChild<UICollapsible>("ConfigPanel");
+                                       
+                toggleLauncher = go   .GetComponentInChild<Toggle>("ToggleLauncher");
+                toggleCounters = go   .GetComponentInChild<Toggle>("ToggleCounters");
+                toggleCounterFPS = go .GetComponentInChild<Toggle>("ToggleCounterFPS");
+                toggleCounterVSZ = go .GetComponentInChild<Toggle>("ToggleCounterVSZ");
+                toggleCounterRSS = go .GetComponentInChild<Toggle>("ToggleCounterRSS");
+                toggleCounterPeak = go.GetComponentInChild<Toggle>("ToggleCounterPeak");
+                toggleCounterGPU = go .GetComponentInChild<Toggle>("ToggleCounterGPU");
+                                       
+                counterSize = go      .GetComponentInChild<Text>("CounterSizeCurrent");
+                counterX = go         .GetComponentInChild<Text>("CounterXCurrent");
+                counterY = go         .GetComponentInChild<Text>("CounterYCurrent");
+                                       
+                sizePlus = go         .GetComponentInChild<UnityEngine.UI.Button>("CounterSizePlus");
+                sizeMinus = go        .GetComponentInChild<UnityEngine.UI.Button>("CounterSizeMinus");
+                                       
+                xPlus = go            .GetComponentInChild<UnityEngine.UI.Button>("CounterXPlus");
+                xMinus = go           .GetComponentInChild<UnityEngine.UI.Button>("CounterXMinus");
+                                       
+                yPlus = go            .GetComponentInChild<UnityEngine.UI.Button>("CounterYPlus");
+                yMinus = go           .GetComponentInChild<UnityEngine.UI.Button>("CounterYMinus");
+
+                precisionMinus.onClick.AddListener(() =>
+                {
+                    if (timeScale > 1)
+                    {
+                        timeScale = timeScale >> 1;
+                        memoryHistory = new memoryState[width];
+                        fullUpdate = true;
+                    }
+                });
+
+                precisionPlus.onClick.AddListener(() =>
+                {
+                    if (timeScale < 8)
+                    {
+                        timeScale = timeScale << 1;
+                        memoryHistory = new memoryState[width];
+                        fullUpdate = true;
+                    }
+                });
+
+                configButton.onClick.AddListener(() =>
+                {
+                    showConfUI = !showConfUI;
+                    configCollapsible.OnValueChanged(showConfUI);
+                });
+
+                topButton.onClick.AddListener(() => { topMemory = (long) memoryVsz; });
+
+                toggleRelative.isOn = relative;
+                toggleColor.isOn = colorfulMode;
+                toggleUpdate.isOn = OnlyUpdateWhenDisplayed;
+
+                toggleRelative.onValueChanged.AddListener(b => { relative = b; fullUpdate = true; });
+                toggleColor.onValueChanged.AddListener(b =>
+                {
+                    colorfulMode = b;
+                    fullUpdate = true;
+                    if (colorfulMode) timeScale = 10;
+                });
+                toggleUpdate.onValueChanged.AddListener(b => { OnlyUpdateWhenDisplayed = b; });
+
+                toggleLauncher.isOn = useAppLauncher;
+                toggleCounters.isOn = memoryGizmo;
+                toggleCounterFPS.isOn = displayFps;
+                toggleCounterVSZ.isOn = displayMem;
+                toggleCounterRSS.isOn = displayMemRss;
+                toggleCounterPeak.isOn = displayPeakRss;
+                toggleCounterGPU.isOn = displayGpu;
+
+                toggleLauncher.onValueChanged.AddListener(b => { useAppLauncher = b; });
+                toggleCounters.onValueChanged.AddListener(b => { memoryGizmo = b; });
+                toggleCounterFPS.onValueChanged.AddListener(b => { displayFps = b; });
+                toggleCounterVSZ.onValueChanged.AddListener(b => { displayMem = b; });
+                toggleCounterRSS.onValueChanged.AddListener(b => { displayMemRss = b; });
+                toggleCounterPeak.onValueChanged.AddListener(b => { displayPeakRss = b; });
+                toggleCounterGPU.onValueChanged.AddListener(b => { displayGpu = b; });
+
+                counterSize.text = fpsSize.ToString();
+                counterX.text = CountersX.ToString();
+                counterY.text = CountersY.ToString();
+
+                sizePlus.onClick.AddListener(() =>
+                {
+                    if (Event.current.button == 0)
+                        fpsSize++;
+                    else if (Event.current.button == 1)
+                        fpsSize += 10;
+                    counterSize.text = fpsSize.ToString();
+                });
+                sizeMinus.onClick.AddListener(() =>
+                {
+                    print(Event.current.button);
+                    if (Event.current.button == 0)
+                        fpsSize--;
+                    else if (Event.current.button == 1)
+                        fpsSize -= 10;
+                    counterSize.text = fpsSize.ToString();
+                });
+
+                xPlus.onClick.AddListener(() =>
+                {
+                    if (Event.current.button == 0)
+                        CountersX++;
+                    else if (Event.current.button == 1)
+                        CountersX += 10;
+                    counterX.text = CountersX.ToString();
+                });
+                xMinus.onClick.AddListener(() =>
+                {
+                    if (Event.current.button == 0)
+                        CountersX--;
+                    else if (Event.current.button == 1)
+                        CountersX -= 10;
+                    counterX.text = CountersX.ToString();
+                });
+
+                yPlus.onClick.AddListener(() =>
+                {
+                    if (Event.current.button == 0)
+                        CountersY++;
+                    else if (Event.current.button == 1)
+                        CountersY += 10;
+                    counterY.text = CountersY.ToString();
+                });
+                yMinus.onClick.AddListener(() =>
+                {
+                    if (Event.current.button == 0)
+                        CountersY--;
+                    else if (Event.current.button == 1)
+                        CountersY -= 10;
+                    counterY.text = CountersY.ToString();
+                });
+
+                toggleKSP.isOn = realMemory;
+                toggleGPU.isOn = gpuMemory;
+                toggleMono.isOn = !realMemory && !gpuMemory;
+
+                toggleKSP.onValueChanged.AddListener(MemoryToogleEvent);
+                toggleGPU.onValueChanged.AddListener(MemoryToogleEvent);
+                toggleMono.onValueChanged.AddListener(MemoryToogleEvent);
+                
+                graph.texture = memoryTexture;
+            }
+        }
+
+        private void MemoryToogleEvent(bool b)
+        {
+            fullUpdate = true;
+            gpuMemory = toggleGPU.isOn;
+            realMemory = toggleKSP.isOn;
+        }
+        
+        private void UIUpdate(processMemory mem)
+        {
+            if (prefabWindow == null)
+                return;
+
+            if (prefabWindow.gameObject.activeSelf != showUI)
+                prefabWindow.gameObject.SetActive(showUI);
+
+            if (!showUI)
+                return;
+
+
+            precision.text = (1f / timeScale).ToString("0.###") + "s";
+            
+            infoKSP.text = "KSP: " + ConvertToKBString(mem.vsz) + " / " + ConvertToKBString(maxAllowedMem);
+            infoGPU.text = (adapter != null) ? "GPU: " + ConvertToKBString(adapter.DedicatedVramUsage) + " / " + ConvertToKBString(adapter.DedicatedVramLimit) : "N/A";
+            infoMono.text = "Mono allocated:" + ConvertToMBString(Profiler.GetTotalAllocatedMemory())
+                + " min: " + ConvertToMBString(memoryHistory[activeSecond].min)
+                + " max: " + ConvertToMBString(memoryHistory[activeSecond].max)
+                + " GC : " + memoryHistory[previousActiveSecond].gc.ToString();
+            infoFPS.text = "FPS: " + fps.ToString("0.0");
+
+            topLabel.text = "Since top: " + (topMemory != 0 ? ConvertToKBString(((long) memoryVsz - topMemory)) : "0");
+            
+            for (int i = 0; i <= GraphLabelsCount; i++)
+            {
+                graphLabels[i].text = ConvertToMBString(displayMaxMemory - (displayMaxMemory - displayMinMemory) * i / GraphLabelsCount);
+            }
+        }
+
+
+        public void Update()
+        {
+            if (panelPos == null)
+            {
+                //UItests();
+
+                UICreateCounters();
+
+                //window = addWindow(UIMasterController.Instance.appCanvas.gameObject, "MyWindow");
+                //Canvas.ForceUpdateCanvases();
+                
+                return;
+            }
+            
+            if (prefabWindow == null && AssetLoader.Ready)
+            {
+                //print("Asset bundles");
+                //print(AssetLoader.BundleDefinitions.Count);
+                //foreach (BundleDefinition b in AssetLoader.BundleDefinitions)
+                //{
+                //    print(b.name + " " + b.createdTime + " " + b.path + " " + b.info + " " + b.urlName);
+                //}
+                //print(AssetLoader.AssetDefinitions.Count);
+                //foreach (AssetDefinition a in AssetLoader.AssetDefinitions)
+                //{
+                //    print(a.name + " " + a.type + " " + a.path);
+                //}
+
+                UILoad();
+            }
+            
+            memVszText.gameObject.SetActive(memoryGizmo && displayMem);
+            memRssText.gameObject.SetActive(memoryGizmo && displayMemRss);
+            memPeakRssText.gameObject.SetActive(memoryGizmo && displayPeakRss);
+            memGpuText.gameObject.SetActive(memoryGizmo && displayGpu && adapter != null);
+            memFpsText.gameObject.SetActive(memoryGizmo && displayFps);
+
+            panelPos.localPosition = new Vector3((-(Screen.width >> 1) + CountersX) / GameSettings.UI_SCALE, ((Screen.height >> 1) - CountersY) / GameSettings.UI_SCALE, 0);
+
+            timeleft -= Time.deltaTime;
+            accum += Time.timeScale / Time.deltaTime;
+            ++frames;
+            // Interval ended - update GUI text and start new interval
+            if (timeleft <= 0f)
+            {
+                fps = accum / frames;
+                timeleft = updateInterval;
+                accum = 0;
+                frames = 0;
+
+                if (displayFps)
+                {
+                    fpsString = StringFormater.Format("{0:##0.0} FPS", fps);
+                    memFpsText.text = fpsString;
+                    memFpsText.fontSize = fpsSize;
+                }
+            }
+            
+            processMemory memory = getProcessMemory();
+            
+            if (displayMem)
+            {
+                memoryVsz = memory.vsz;
+                memoryVszString = ConvertToMBString(memoryVsz);
+                memVszText.text = memoryVszString;
+                memVszText.fontSize = fpsSize;
+            }
+
+            if (displayMemRss)
+            {
+                memoryRss = memory.rss;
+                memoryRssString = ConvertToMBString(memoryRss);
+                memRssText.text = memoryRssString;
+                memRssText.fontSize = fpsSize;
+            }
 
             if (memoryVsz > peakMemory)
                 peakMemory = memoryVsz;
-            memoryPeakRssString = ConvertToMBString(peakMemory);
 
-            if (adapter != null)
+            if(displayPeakRss)
+            {
+                memoryPeakRssString = ConvertToMBString(peakMemory);
+                memPeakRssText.text = memoryPeakRssString;
+                memPeakRssText.fontSize = fpsSize;
+            }
+
+            if (displayGpu && adapter != null)
             {
                 adapter.UpdateValues();
                 gpuMemoryRssString = ConvertToMBString(adapter.DedicatedVramUsage);
+                memGpuText.text = gpuMemoryRssString;
+                memGpuText.fontSize = fpsSize;
             }
 
             lmb = lmb | Input.GetMouseButtonDown(0);
@@ -578,6 +1364,13 @@ namespace GCMonitor
             {
                 memoryGizmo = !memoryGizmo;
             }
+
+            if (GameSettings.MODIFIER_KEY.GetKey() && Input.GetKeyDown(KeyCode.K))
+            {
+                KillAllHumans();
+            }
+
+            UIUpdate(memory);
 
             if (!showUI)
                 return;
@@ -656,6 +1449,36 @@ namespace GCMonitor
             }
         }
 
+        private bool eradicating = false;
+
+        private void KillAllHumans()
+        {
+            if (eradicating)
+            {
+                print("Humans extermination already in progress. Please standby");
+                return;
+            }
+
+            print("Initialing extermination protocols. Please standby");
+
+            StartCoroutine(Exterminate());
+
+        }
+
+        private IEnumerator Exterminate()
+        {
+            while (true)
+            {
+                print("Currently at  VSZ " + memoryVszString + " RSS " + memoryRssString);
+                for (int i = 0; i < 30; i++)
+                {
+                    Texture2D memoryWorm = new Texture2D(1024, 1024, TextureFormat.ARGB32, false);
+                    memoryWorm.Apply();
+                }
+                yield return new WaitForSeconds(5);
+            }
+        }
+
         private void UpdateButton()
         {
 
@@ -707,7 +1530,8 @@ namespace GCMonitor
 
             if (!useAppLauncher && alButton != null)
             {
-                ApplicationLauncher.Instance.RemoveApplication(alButton);
+                print("Removing Launcher");
+                ApplicationLauncher.Instance.RemoveModApplication(alButton);
             }
 
             if (tbButton != null)
@@ -952,63 +1776,63 @@ namespace GCMonitor
             }
         }
 
-        public void OnGUI()
-        {
-            if (memoryGizmo && !hiddenUI)
-            {
-                if (fpsLabelStyle == null)
-                    fpsLabelStyle = new GUIStyle(GUI.skin.label);
+        //public void OnGUI()
+        //{
+        //    //if (memoryGizmo && !hiddenUI)
+        //    //{
+        //    //    if (fpsLabelStyle == null)
+        //    //        fpsLabelStyle = new GUIStyle(GUI.skin.label);
+        //    //
+        //    //    fpsLabelStyle.fontSize = fpsSize;
+        //    //
+        //    //    Vector2 size = fpsLabelStyle.CalcSize(new GUIContent(memoryVszString));
+        //    //
+        //    //    Counters = Mathf.Clamp(Counters, 0, Screen.width);
+        //    //    CountersY = Mathf.Clamp(CountersY, 0, Screen.height);
+        //    //
+        //    //    fpsPos.Set(Counters, CountersY, 200, size.y);
+        //    //    if (displayMem)
+        //    //    {
+        //    //        DrawOutline(fpsPos, memoryVszString, 1, fpsLabelStyle, Color.black,
+        //    //            memoryVsz > alertMem ? Color.red : memoryVsz > warnMem ? XKCDColors.Orange : Color.white);
+        //    //        fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 200, size.y);
+        //    //    }
+        //    //
+        //    //    if (displayMemRss)
+        //    //    {
+        //    //        DrawOutline(fpsPos, memoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
+        //    //        fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
+        //    //    }
+        //    //
+        //    //    if (displayPeakRss)
+        //    //    {
+        //    //        DrawOutline(fpsPos, memoryPeakRssString, 1, fpsLabelStyle, Color.black, Color.white);
+        //    //        fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
+        //    //    }
+        //    //
+        //    //    if (displayGpu)
+        //    //    {
+        //    //        DrawOutline(fpsPos, gpuMemoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
+        //    //        fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
+        //    //    }
+        //    //
+        //    //    if (displayFps)
+        //    //    {
+        //    //        DrawOutline(fpsPos, fpsString, 1, fpsLabelStyle, Color.black, Color.white);
+        //    //    }
+        //    //}
 
-                fpsLabelStyle.fontSize = fpsSize;
+        //    if (showUI && !hiddenUI)
+        //    {
+        //        windowPos = GUILayout.Window(8785478, windowPos, WindowGUI, "GCMonitor", GUILayout.Width(420), GUILayout.Height(220));
+        //    }
 
-                Vector2 size = fpsLabelStyle.CalcSize(new GUIContent(memoryVszString));
-
-                fpsX = Mathf.Clamp(fpsX, 0, Screen.width);
-                fpsY = Mathf.Clamp(fpsY, 0, Screen.height);
-
-                fpsPos.Set(fpsX, fpsY, 200, size.y);
-                if (displayMem)
-                {
-                    DrawOutline(fpsPos, memoryVszString, 1, fpsLabelStyle, Color.black,
-                        memoryVsz > alertMem ? Color.red : memoryVsz > warnMem ? XKCDColors.Orange : Color.white);
-                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 200, size.y);
-                }
-
-                if (displayMemRss)
-                {
-                    DrawOutline(fpsPos, memoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
-                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
-                }
-
-                if (displayPeakRss)
-                {
-                    DrawOutline(fpsPos, memoryPeakRssString, 1, fpsLabelStyle, Color.black, Color.white);
-                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
-                }
-
-                if (displayGpu)
-                {
-                    DrawOutline(fpsPos, gpuMemoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
-                    fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
-                }
-
-                if (displayFps)
-                {
-                    DrawOutline(fpsPos, fpsString, 1, fpsLabelStyle, Color.black, Color.white);
-                }
-            }
-
-            if (showUI && !hiddenUI)
-            {
-                windowPos = GUILayout.Window(8785478, windowPos, WindowGUI, "GCMonitor", GUILayout.Width(420), GUILayout.Height(220));
-            }
-
-            if (showConfUI & showUI && !hiddenUI)
-            {
-                windowConfigPos.Set(windowPos.xMax + 10, windowPos.yMin, windowConfigPos.width, windowConfigPos.height);
-                windowConfigPos = GUILayout.Window(8785479, windowConfigPos, WindowConfigGUI, "Config", GUILayout.Width(80), GUILayout.Height(50));
-            }
-        }
+        //    if (showConfUI & showUI && !hiddenUI)
+        //    {
+        //        windowConfigPos.Set(windowPos.xMax + 10, windowPos.yMin, windowConfigPos.width, windowConfigPos.height);
+        //        windowConfigPos = GUILayout.Window(8785479, windowConfigPos, WindowConfigGUI, "Config", GUILayout.Width(80), GUILayout.Height(50));
+        //    }
+        //}
 
         public void WindowGUI(int windowID)
         {
@@ -1117,11 +1941,11 @@ namespace GCMonitor
 
             GUILayout.BeginVertical(GUILayout.MinWidth(size.x));
 
-            for (int i = 0; i <= GraphLabels; i++)
+            for (int i = 0; i <= GraphLabelsCount; i++)
             {
-                GUILayout.Label(ConvertToMBString(displayMaxMemory - (displayMaxMemory - displayMinMemory) * i / GraphLabels), new GUIStyle(GUI.skin.label) { wordWrap = false });
-                if (i != GraphLabels) //only do it if it's not the last one
-                    GUILayout.Space(height / GraphLabels - labelSpace);
+                GUILayout.Label(ConvertToMBString(displayMaxMemory - (displayMaxMemory - displayMinMemory) * i / GraphLabelsCount), new GUIStyle(GUI.skin.label) { wordWrap = false });
+                if (i != GraphLabelsCount) //only do it if it's not the last one
+                    GUILayout.Space(height / GraphLabelsCount - labelSpace);
             }
             GUILayout.EndVertical();
 
@@ -1155,84 +1979,94 @@ namespace GCMonitor
             GUILayout.BeginHorizontal();
             GUILayout.Label("Size", GUILayout.Width(40));
             if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
-                fpsSize--;
+            {
+                if (Event.current.button == 0)
+                    fpsSize--;
+                else if (Event.current.button == 1)
+                    fpsSize -= 10;
+            }
             GUILayout.Label(fpsSize.ToString(), GUILayout.Width(40));
             if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
-                fpsSize++;
+            {
+                if (Event.current.button == 0)
+                    fpsSize++;
+                else if (Event.current.button == 1)
+                    fpsSize += 10;
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("X", GUILayout.Width(40));
             if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
-                fpsX = fpsX - 5;
-            GUILayout.Label(fpsPos.xMin.ToString("F0"), GUILayout.Width(40));
+            {
+                if (Event.current.button == 0)
+                    CountersX--;
+                else if (Event.current.button == 1)
+                    CountersX -= 10;
+            }
+            GUILayout.Label(CountersX.ToString("F0"), GUILayout.Width(40));
             if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
-                fpsX = fpsX + 5;
+            {
+                if (Event.current.button == 0)
+                    CountersX++;
+                else if (Event.current.button == 1)
+                    CountersX += 10;
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Y", GUILayout.Width(40));
             if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
-                fpsY = fpsY - 5;
-            GUILayout.Label(fpsPos.yMin.ToString("F0"), GUILayout.Width(40));
+            {
+                if (Event.current.button == 0)
+                    CountersY--;
+                else if (Event.current.button == 1)
+                    CountersY -= 10;;
+            }
+            GUILayout.Label(CountersY.ToString("F0"), GUILayout.Width(40));
             if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
-                fpsY = fpsY + 5;
+            {
+                if (Event.current.button == 0)
+                    CountersY++;
+                else if (Event.current.button == 1)
+                    CountersY += 10;
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.EndVertical();
 
-            fpsX = Mathf.Clamp(fpsX, 0, Screen.width);
-            fpsY = Mathf.Clamp(fpsY, 0, Screen.height);
-
+            CountersX = Mathf.Clamp(CountersX, 0, Screen.width);
+            CountersY = Mathf.Clamp(CountersY, 0, Screen.height);
         }
 
         static String ConvertToGBString(long bytes)
         {
-            return (bytes / 1024f / 1024f / 1024f).ToString("#,0.0", spaceFormat) + " GB";
+            return StringFormater.Format("{0:#,0.0} GB", bytes / 1024f / 1024f / 1024f);
         }
 
         static String ConvertToGBString(ulong bytes)
         {
-            return ((bytes >> 20) / 1024f).ToString("#,0.0", spaceFormat) + " GB";
+            return StringFormater.Format("{0:#,0.0} GB", (bytes >> 20) / 1024f);
         }
 
         static String ConvertToMBString(long bytes)
         {
-            return (bytes / 1024f / 1024f).ToString("#,0", spaceFormat) + " MB";
+            return StringFormater.Format(spaceFormat, "{0:#,0} MB", bytes / 1024f / 1024f);
         }
 
         static String ConvertToMBString(ulong bytes)
         {
-            return (bytes >> 20).ToString("#,0", spaceFormat) + " MB";
+            return StringFormater.Format(spaceFormat, "{0:#,0} MB", bytes >> 20);
         }
 
         static String ConvertToKBString(long bytes)
         {
-            return (bytes / 1024f).ToString("#,0", spaceFormat) + " kB";
+            return StringFormater.Format(spaceFormat, "{0:#,0} kB", bytes / 1024f);
         }
 
         static String ConvertToKBString(ulong bytes)
         {
-            return (bytes >> 10).ToString("#,0", spaceFormat) + " kB";
-        }
-
-        void DrawOutline(Rect r, string t, int strength, GUIStyle style, Color outColor, Color inColor)
-        {
-            Color backup = style.normal.textColor;
-            style.normal.textColor = outColor;
-            for (int i = -strength; i <= strength; i++)
-            {
-                GUI.Label(new Rect(r.x - strength, r.y + i, r.width, r.height), t, style);
-                GUI.Label(new Rect(r.x + strength, r.y + i, r.width, r.height), t, style);
-            }
-            for (int i = -strength + 1; i <= strength - 1; i++)
-            {
-                GUI.Label(new Rect(r.x + i, r.y - strength, r.width, r.height), t, style);
-                GUI.Label(new Rect(r.x + i, r.y + strength, r.width, r.height), t, style);
-            }
-            style.normal.textColor = inColor;
-            GUI.Label(r, t, style);
-            style.normal.textColor = backup;
+            return StringFormater.Format(spaceFormat, "{0:#,0} kB", bytes >> 10);
         }
 
         public new static void print(object message)

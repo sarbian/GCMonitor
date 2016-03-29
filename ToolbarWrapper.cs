@@ -23,13 +23,14 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-﻿using System;
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
-
+// TODO: Change to your plugin's namespace here.
 namespace GCMonitor
 {
 
@@ -429,12 +430,14 @@ namespace GCMonitor
     /// <example>
     /// <code>
     /// IButton button = ...
-    /// button.Visibility = new GameScenesVisibility(GameScenes.EDITOR, GameScenes.FLIGHT);
+    /// button.Visibility = new GameScenesVisibility(GameScenes.EDITOR, GameScenes.SPH);
     /// </code>
     /// </example>
     /// <seealso cref="IButton.Visibility"/>
     public class GameScenesVisibility : IVisibility
     {
+        private GameScenes[] gameScenes;
+
         public bool Visible
         {
             get
@@ -451,6 +454,7 @@ namespace GCMonitor
             Type gameScenesVisibilityType = ToolbarTypes.getType("Toolbar.GameScenesVisibility");
             realGameScenesVisibility = Activator.CreateInstance(gameScenesVisibilityType, new object[] { gameScenes });
             visibleProperty = ToolbarTypes.getProperty(gameScenesVisibilityType, "Visible");
+            this.gameScenes = gameScenes;
         }
     }
 
@@ -711,9 +715,9 @@ namespace GCMonitor
                 if (value != null)
                 {
                     functionDrawable = Activator.CreateInstance(types.functionDrawableType, new object[] {
-                        new Action(() => value.Update()),
-                        new Func<Vector2, Vector2>((pos) => value.Draw(pos))
-                    });
+						new Action(() => value.Update()),
+						new Func<Vector2, Vector2>((pos) => value.Draw(pos))
+					});
                 }
                 types.button.drawableProperty.SetValue(realButton, functionDrawable, null);
                 drawable_ = value;

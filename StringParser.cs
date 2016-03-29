@@ -1,5 +1,5 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
-// Licensed under the MIT license. See LICENSE file in the project root for full license information.
+// Licensed under the MIT license. See https://github.com/dotnet/coreclr/blob/master/LICENSE.TXT for full license information.
 
 // Lifted from the Corefx repo ( https://github.com/dotnet/corefx/blob/1f79ba743cf84dc88cdc0dc9a64b02907d4f21b0/src/Common/src/System/IO/StringParser.cs ) 
 // Thanks you Microsoft for making my life easier (and using the same license as me)
