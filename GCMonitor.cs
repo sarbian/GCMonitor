@@ -158,7 +158,7 @@ namespace GCMonitor
         [Persistent]
         int fpsYEditor = 200;
 
-        private IButton tbButton;
+        //private IButton tbButton;
         private ApplicationLauncherButton alButton;
 
         private RectTransform panelPos;
@@ -1504,15 +1504,15 @@ namespace GCMonitor
                 }
             }
 
-            if (tbButton == null && ToolbarManager.ToolbarAvailable)
-            {
-                print("Toolbar config");
-                tbButton = ToolbarManager.Instance.add("GCMonitor", "GCMonitor");
-                tbButton.ToolTip = "GCMonitor";
-                tbButton.TexturePath = "GCMonitor/GCMonitor24N";
-                tbButton.OnClick += tbButtonClick;
-                tbButton.Visible = true;
-            }
+            //if (tbButton == null && ToolbarManager.ToolbarAvailable)
+            //{
+            //    print("Toolbar config");
+            //    tbButton = ToolbarManager.Instance.add("GCMonitor", "GCMonitor");
+            //    tbButton.ToolTip = "GCMonitor";
+            //    tbButton.TexturePath = "GCMonitor/GCMonitor24N";
+            //    tbButton.OnClick += tbButtonClick;
+            //    tbButton.Visible = true;
+            //}
 
             if (useAppLauncher && alButton == null && ApplicationLauncher.Ready)
             {
@@ -1534,10 +1534,10 @@ namespace GCMonitor
                 ApplicationLauncher.Instance.RemoveModApplication(alButton);
             }
 
-            if (tbButton != null)
-            {
-                tbButton.ToolTip = memoryVszString;
-            }
+            //if (tbButton != null)
+            //{
+            //    tbButton.ToolTip = memoryVszString;
+            //}
 
             if (state == activeMemState)
                 return;
@@ -1548,30 +1548,30 @@ namespace GCMonitor
             {
                 case MemState.NORMAL:
                     updateLauncher("GCMonitor/GCMonitor38N");
-                    updateToolBar("GCMonitor/GCMonitor24N");
+                    //updateToolBar("GCMonitor/GCMonitor24N");
                     break;
                 case MemState.WARNING:
                     updateLauncher("GCMonitor/GCMonitor38W");
-                    updateToolBar("GCMonitor/GCMonitor24W");
+                    //updateToolBar("GCMonitor/GCMonitor24W");
                     break;
                 case MemState.ALERT1:
                     updateLauncher("GCMonitor/GCMonitor38A1");
-                    updateToolBar("GCMonitor/GCMonitor24A1");
+                    //updateToolBar("GCMonitor/GCMonitor24A1");
                     break;
                 case MemState.ALERT2:
                     updateLauncher("GCMonitor/GCMonitor38A2");
-                    updateToolBar("GCMonitor/GCMonitor24A2");
+                    //updateToolBar("GCMonitor/GCMonitor24A2");
                     break;
             }
         }
 
-        private void tbButtonClick(ClickEvent e)
-        {
-            if (e.MouseButton == 0)
-                memoryGizmo = !memoryGizmo;
-            if (e.MouseButton == 1)
-                showUI = !showUI;
-        }
+        //private void tbButtonClick(ClickEvent e)
+        //{
+        //    if (e.MouseButton == 0)
+        //        memoryGizmo = !memoryGizmo;
+        //    if (e.MouseButton == 1)
+        //        showUI = !showUI;
+        //}
 
         private void alHover()
         {
@@ -1587,12 +1587,12 @@ namespace GCMonitor
                 showUI = !showUI;
         }
 
-        private void updateToolBar(string texture)
-        {
-            if (tbButton == null)
-                return;
-            tbButton.TexturePath = texture;
-        }
+        //private void updateToolBar(string texture)
+        //{
+        //    if (tbButton == null)
+        //        return;
+        //    tbButton.TexturePath = texture;
+        //}
 
         private void updateLauncher(string texture)
         {
