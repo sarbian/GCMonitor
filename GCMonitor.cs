@@ -64,8 +64,6 @@ namespace GCMonitor
         readonly Texture2D memoryTexture = new Texture2D(width, height);
         float ratio;
 
-        private GUIStyle fpsLabelStyle;
-
         int timeScale = 1;
 
         bool killThread = false;
@@ -175,9 +173,10 @@ namespace GCMonitor
         long topMemory;
        
         public float updateInterval = 0.25f;
-        private float accum = 0; // FPS accumulated over the interval
-        private int frames = 0; // Frames drawn over the interval
-        private float timeleft; // Left time for current interval
+        private float timeleft;
+        float[] fpsBuffer;
+        int fpsBufferIndex;
+        public int frameRange = 10;
 
         private float fps;
         private string fpsString = string.Empty;
@@ -1254,10 +1253,48 @@ namespace GCMonitor
                 graphLabels[i].text = ConvertToMBString(displayMaxMemory - (displayMaxMemory - displayMinMemory) * i / GraphLabelsCount);
             }
         }
+        
+        void InitializeBuffer()
+        {
+            if (frameRange <= 0)
+            {
+                frameRange = 1;
+            }
+            fpsBuffer = new float[frameRange];
+            fpsBufferIndex = 0;
+        }
 
+        void UpdateBuffer()
+        {
+            fpsBuffer[fpsBufferIndex++] = Time.unscaledDeltaTime;
+            if (fpsBufferIndex >= frameRange)
+            {
+                fpsBufferIndex = 0;
+            }
+            timeleft -= Time.unscaledDeltaTime;
+        }
+
+        void CalculateFPS()
+        {
+            float sum = 0;
+            for (int i = 0; i < frameRange; i++)
+            {
+                sum += fpsBuffer[i];
+            }
+            fps = frameRange / sum;
+        }
 
         public void Update()
         {
+
+            if (fpsBuffer == null || fpsBuffer.Length != frameRange)
+            {
+                InitializeBuffer();
+            }
+
+            UpdateBuffer();
+            //CalculateFPS();
+
             if (panelPos == null)
             {
                 //UItests();
@@ -1295,25 +1332,34 @@ namespace GCMonitor
 
             panelPos.localPosition = new Vector3((-(Screen.width >> 1) + CountersX) / GameSettings.UI_SCALE, ((Screen.height >> 1) - CountersY) / GameSettings.UI_SCALE, 0);
 
-            timeleft -= Time.deltaTime;
-            accum += Time.timeScale / Time.deltaTime;
-            ++frames;
-            // Interval ended - update GUI text and start new interval
-            if (timeleft <= 0f)
-            {
-                fps = accum / frames;
-                timeleft = updateInterval;
-                accum = 0;
-                frames = 0;
-
-                if (displayFps)
-                {
-                    fpsString = StringFormater.Format("{0:##0.0} FPS", fps);
-                    memFpsText.text = fpsString;
-                    memFpsText.fontSize = fpsSize;
-                }
-            }
+            //timeleft -= Time.deltaTime;
+            //accum += Time.timeScale / Time.deltaTime;
+            //++frames;
+            //// Interval ended - update GUI text and start new interval
+            //if (timeleft <= 0f)
+            //{
+            //    fps = accum / frames;
+            //    timeleft = updateInterval;
+            //    accum = 0;
+            //    frames = 0;
+            //
+            //    if (displayFps)
+            //    {
+            //        fpsString = StringFormater.Format("{0:##0.0} FPS", fps);
+            //        memFpsText.text = fpsString;
+            //        memFpsText.fontSize = fpsSize;
+            //    }
+            //}
             
+            if (displayFps && timeleft <= 0f)
+            {
+                CalculateFPS();
+                fpsString = StringFormater.Format("{0:##0.0} FPS", fps);
+                memFpsText.text = fpsString;
+                memFpsText.fontSize = fpsSize;
+                timeleft = updateInterval;
+            }
+
             processMemory memory = getProcessMemory();
             
             if (displayMem)
@@ -1365,10 +1411,10 @@ namespace GCMonitor
                 memoryGizmo = !memoryGizmo;
             }
 
-            if (GameSettings.MODIFIER_KEY.GetKey() && Input.GetKeyDown(KeyCode.K))
-            {
-                KillAllHumans();
-            }
+            //if (GameSettings.MODIFIER_KEY.GetKey() && Input.GetKeyDown(KeyCode.K))
+            //{
+            //    KillAllHumans();
+            //}
 
             UIUpdate(memory);
 
