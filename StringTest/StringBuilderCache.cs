@@ -9,26 +9,6 @@ using System.Text;
 
 namespace GCMonitor
 {
-    internal  static class StringFormater
-    {
-        public static String Format(String format, params Object[] args)
-        {
-            return FormatHelper(null, format, args);
-        }
-
-        public static String Format(IFormatProvider provider, String format, params Object[] args)
-        {
-            return FormatHelper(provider, format, args);
-        }
-
-        private static String FormatHelper(IFormatProvider provider, String format, Object[] args)
-        {
-            return StringBuilderCache.GetStringAndRelease(
-                StringBuilderCache
-                    .Acquire(format.Length + args.Length * 8).AppendFormat(provider, format, args));
-        }
-    }
-
     internal static class StringBuilderCache
     {
         // The value 360 was chosen in discussion with performance experts as a compromise between using
@@ -39,7 +19,16 @@ namespace GCMonitor
         [ThreadStatic]
         private static StringBuilder CachedInstance;
 
-        public static StringBuilder Acquire(int capacity = 20)
+        //private static readonly FieldInfo strFieldInfo;
+        //private static readonly FieldInfo CachedStrFieldInfo;
+        //
+        //static StringBuilderCache()
+        //{
+        //    strFieldInfo = typeof(StringBuilder).GetField("_str", BindingFlags.NonPublic | BindingFlags.Instance);
+        //    CachedStrFieldInfo = typeof(StringBuilder).GetField("_cached_str", BindingFlags.NonPublic | BindingFlags.Instance);
+        //}
+
+        public static StringBuilder Acquire(int capacity = 256)
         {
             if (capacity <= MAX_BUILDER_SIZE)
             {
@@ -60,7 +49,7 @@ namespace GCMonitor
             return new StringBuilder(capacity);
         }
 
-        public static void Release(StringBuilder sb)
+        public static void Release(this StringBuilder sb)
         {
             if (sb.Capacity <= MAX_BUILDER_SIZE)
             {
@@ -68,11 +57,27 @@ namespace GCMonitor
             }
         }
 
-        public static string GetStringAndRelease(StringBuilder sb)
+        //public static string ToStringFree(this StringBuilder sb)
+        //{
+        //    string str = (string)strFieldInfo.GetValue(sb);
+        //    return str;
+        //}
+        //
+        //public static string ToStringFreeAndRelease(this StringBuilder sb)
+        //{
+        //    string result = sb.ToStringFree();
+        //
+        //    Release(sb);
+        //    return result;
+        //}
+
+        public static string ToStringAndRelease(this StringBuilder sb)
         {
             string result = sb.ToString();
+
             Release(sb);
             return result;
         }
+
     }
 }

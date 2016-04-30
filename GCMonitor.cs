@@ -24,7 +24,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -32,7 +31,6 @@ using System.Threading;
 using KSP.IO;
 using KSP.UI;
 using KSP.UI.Screens;
-using KSPAssets;
 using KSPAssets.Loaders;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -51,10 +49,6 @@ namespace GCMonitor
         private const int height = 512;
 
         const int GraphLabelsCount = 4;
-        const float labelSpace = 20f * (GraphLabelsCount + 1) / GraphLabelsCount; //fraction because we add Space 1 less time than we draw a Label
-
-        private Rect windowPos = new Rect(80, 80, 400, 200);
-        private Rect windowConfigPos = new Rect(80 + 410, 80, 200, 100);
         
         private bool showUI = false;
         private bool showConfUI = false;
@@ -64,7 +58,17 @@ namespace GCMonitor
         readonly Texture2D memoryTexture = new Texture2D(width, height);
         float ratio;
 
-        int timeScale = 1;
+        private int _timeScale = 1;
+        int timeScale
+        {
+            get { return _timeScale; }
+            set
+            {
+                _timeScale = value;
+                if (precision != null)
+                    precision.text = (1f / timeScale).ToString("0.###") + "s";
+            }
+        }
 
         bool killThread = false;
 
@@ -160,7 +164,7 @@ namespace GCMonitor
         private ApplicationLauncherButton alButton;
 
         private RectTransform panelPos;
-//        private Canvas countersCanvas;
+
         private Text memVszText;
         private Text memRssText;
         private Text memPeakRssText;
@@ -179,7 +183,15 @@ namespace GCMonitor
         public int frameRange = 10;
 
         private float fps;
-        private string fpsString = string.Empty;
+
+        private static ulong warnMem;
+        private static ulong alertMem;
+        private static ulong memoryVsz;
+        private static ulong memoryRss;
+        private static ulong maxAllowedMem;
+
+        //private static StringBuilder memoryVszString = new StringBuilder();
+        //private static StringBuilder memoryRssString = new StringBuilder();
 
         private static Stopwatch watch;
 
@@ -451,17 +463,7 @@ namespace GCMonitor
             task_info(mach_task_self(), taskFlavorOSX, new IntPtr(&resultOSX), ref structureLengthOSX);
             return new processMemory((ulong)resultOSX.resident_size, (ulong)resultOSX.virtual_size, maxAllowedMem);
         }
-
-        public static ulong warnMem;
-        public static ulong alertMem;
-        public static string memoryVszString;
-        public static ulong memoryVsz;
-        public static string memoryRssString;
-        public static string memoryPeakRssString;
-        public static string gpuMemoryRssString;
-        public static ulong memoryRss;
-        public static ulong maxAllowedMem;
-
+        
         private static processMemory getProcessMemory_unimplemented()
         {
             return new processMemory(0, 0, 0);
@@ -527,15 +529,13 @@ namespace GCMonitor
                 Debug.Log("[GCMonitor] Unable to find getRSS implementation\n" + e);
                 getProcessMemory = getProcessMemory_unimplemented;
             }
-
-            
+           
             maxAllowedMem = IsX64() ?  ((ulong)SystemInfo.systemMemorySize) << 20 : uint.MaxValue;
-
             
             if (!IsX64() && Application.platform == RuntimePlatform.WindowsPlayer && getProcessMemory().max != 0)
             {
                 maxAllowedMem = getProcessMemory().max;
-                Debug.Log("[GCMonitor] Maximum usable memoryVsz " + ConvertToGBString(maxAllowedMem) + " / " + ConvertToMBString(maxAllowedMem));
+                //Debug.Log("[GCMonitor] Maximum usable memoryVsz " + ConvertToGBString(maxAllowedMem) + " / " + ConvertToMBString(maxAllowedMem));
             }
 
             warnMem = (ulong)(maxAllowedMem * warnPercent);
@@ -580,7 +580,7 @@ namespace GCMonitor
 
         internal void Start()
         {
-            print("Start - Creating UI");
+            //print("Start - Creating UI");
 
             //UItests();
             //
@@ -940,8 +940,6 @@ namespace GCMonitor
 
         private MemState activeMemState;
 
-
-
         private RawImage graph;
         private Text[] graphLabels;
         private Text infoKSP;
@@ -1092,6 +1090,10 @@ namespace GCMonitor
                 yPlus = go            .GetComponentInChild<UnityEngine.UI.Button>("CounterYPlus");
                 yMinus = go           .GetComponentInChild<UnityEngine.UI.Button>("CounterYMinus");
 
+
+                // Force update the precision text
+                timeScale = timeScale;
+
                 precisionMinus.onClick.AddListener(() =>
                 {
                     if (timeScale > 1)
@@ -1118,7 +1120,10 @@ namespace GCMonitor
                     configCollapsible.OnValueChanged(showConfUI);
                 });
 
-                topButton.onClick.AddListener(() => { topMemory = (long) memoryVsz; });
+                topButton.onClick.AddListener(() =>
+                {
+                    topMemory = (long) memoryVsz;
+                });
 
                 toggleRelative.isOn = relative;
                 toggleColor.isOn = colorfulMode;
@@ -1216,14 +1221,13 @@ namespace GCMonitor
                 graph.texture = memoryTexture;
             }
         }
-
         private void MemoryToogleEvent(bool b)
         {
             fullUpdate = true;
             gpuMemory = toggleGPU.isOn;
             realMemory = toggleKSP.isOn;
         }
-        
+
         private void UIUpdate(processMemory mem)
         {
             if (prefabWindow == null)
@@ -1234,23 +1238,16 @@ namespace GCMonitor
 
             if (!showUI)
                 return;
-
-
-            precision.text = (1f / timeScale).ToString("0.###") + "s";
             
-            infoKSP.text = "KSP: " + ConvertToKBString(mem.vsz) + " / " + ConvertToKBString(maxAllowedMem);
-            infoGPU.text = (adapter != null) ? "GPU: " + ConvertToKBString(adapter.DedicatedVramUsage) + " / " + ConvertToKBString(adapter.DedicatedVramLimit) : "N/A";
-            infoMono.text = "Mono allocated:" + ConvertToMBString(Profiler.GetTotalAllocatedMemory())
-                + " min: " + ConvertToMBString(memoryHistory[activeSecond].min)
-                + " max: " + ConvertToMBString(memoryHistory[activeSecond].max)
-                + " GC : " + memoryHistory[previousActiveSecond].gc.ToString();
-            infoFPS.text = "FPS: " + fps.ToString("0.0");
-
-            topLabel.text = "Since top: " + (topMemory != 0 ? ConvertToKBString(((long) memoryVsz - topMemory)) : "0");
+            infoKSP.text = StringFormater.ConcatFormat("KSP: {0} kB / {1} kB", ConvertToKB(mem.vsz), ConvertToKB(maxAllowedMem));
+            infoGPU.text = (adapter != null) ? StringFormater.ConcatFormat("GPU: {0} kB / {1} kB", ConvertToKB(adapter.DedicatedVramUsage), ConvertToKB(adapter.DedicatedVramLimit)) : "N/A";
+            infoMono.text = StringFormater.ConcatFormat("Mono allocated:{0} MB min: {1} MB max: {2} MB GC : {3} MB", ConvertToMB(Profiler.GetTotalAllocatedMemory()), ConvertToMB(memoryHistory[activeSecond].min), ConvertToMB(memoryHistory[activeSecond].max), memoryHistory[previousActiveSecond].gc);
+            infoFPS.text = StringFormater.ConcatFormat("FPS: {0:0.0}", fps);
+            topLabel.text = StringFormater.ConcatFormat("Since top: {0} kB", (topMemory != 0 ? ConvertToKB(((long)memoryVsz - topMemory)) : 0));
             
             for (int i = 0; i <= GraphLabelsCount; i++)
             {
-                graphLabels[i].text = ConvertToMBString(displayMaxMemory - (displayMaxMemory - displayMinMemory) * i / GraphLabelsCount);
+                graphLabels[i].text = StringFormater.ConcatFormat("{0} MB", ConvertToMB(displayMaxMemory - (displayMaxMemory - displayMinMemory) * i / GraphLabelsCount));
             }
         }
         
@@ -1332,49 +1329,45 @@ namespace GCMonitor
 
             panelPos.localPosition = new Vector3((-(Screen.width >> 1) + CountersX) / GameSettings.UI_SCALE, ((Screen.height >> 1) - CountersY) / GameSettings.UI_SCALE, 0);
 
-            //timeleft -= Time.deltaTime;
-            //accum += Time.timeScale / Time.deltaTime;
-            //++frames;
-            //// Interval ended - update GUI text and start new interval
-            //if (timeleft <= 0f)
-            //{
-            //    fps = accum / frames;
-            //    timeleft = updateInterval;
-            //    accum = 0;
-            //    frames = 0;
-            //
-            //    if (displayFps)
-            //    {
-            //        fpsString = StringFormater.Format("{0:##0.0} FPS", fps);
-            //        memFpsText.text = fpsString;
-            //        memFpsText.fontSize = fpsSize;
-            //    }
-            //}
-            
             if (displayFps && timeleft <= 0f)
             {
                 CalculateFPS();
-                fpsString = StringFormater.Format("{0:##0.0} FPS", fps);
-                memFpsText.text = fpsString;
+   
+                memFpsText.text = StringFormater.ConcatFormat("{0:0.0} FPS", fps);
+                
                 memFpsText.fontSize = fpsSize;
                 timeleft = updateInterval;
             }
+
+
+            //Profiler.BeginSample("ConcatFormat");
+            //for (int i = 0; i < 100; i++)
+            //{
+            //    StringTest.ConcatFormat("{0:0.0} FPS", fps);
+            //}
+            //Profiler.EndSample();
+            //
+            //Profiler.BeginSample("StringFormater");
+            //for (int i = 0; i < 100; i++)
+            //{
+            //    StringFormater.Format("{0:##0.0} FPS", fps);
+            //}
+            //Profiler.EndSample();
+
 
             processMemory memory = getProcessMemory();
             
             if (displayMem)
             {
                 memoryVsz = memory.vsz;
-                memoryVszString = ConvertToMBString(memoryVsz);
-                memVszText.text = memoryVszString;
+                memVszText.text = ConvertToMBString(memoryVsz);
                 memVszText.fontSize = fpsSize;
             }
 
             if (displayMemRss)
             {
                 memoryRss = memory.rss;
-                memoryRssString = ConvertToMBString(memoryRss);
-                memRssText.text = memoryRssString;
+                memRssText.text = ConvertToMBString(memoryRss);
                 memRssText.fontSize = fpsSize;
             }
 
@@ -1383,16 +1376,14 @@ namespace GCMonitor
 
             if(displayPeakRss)
             {
-                memoryPeakRssString = ConvertToMBString(peakMemory);
-                memPeakRssText.text = memoryPeakRssString;
+                memPeakRssText.text = ConvertToMBString(peakMemory);
                 memPeakRssText.fontSize = fpsSize;
             }
 
             if (displayGpu && adapter != null)
             {
                 adapter.UpdateValues();
-                gpuMemoryRssString = ConvertToMBString(adapter.DedicatedVramUsage);
-                memGpuText.text = gpuMemoryRssString;
+                memGpuText.text = ConvertToMBString(adapter.DedicatedVramUsage);
                 memGpuText.fontSize = fpsSize;
             }
 
@@ -1515,7 +1506,7 @@ namespace GCMonitor
         {
             while (true)
             {
-                print("Currently at  VSZ " + memoryVszString + " RSS " + memoryRssString);
+                print("Currently at  VSZ " + memoryVsz + " RSS " + memoryRss);
                 for (int i = 0; i < 30; i++)
                 {
                     Texture2D memoryWorm = new Texture2D(1024, 1024, TextureFormat.ARGB32, false);
@@ -1821,298 +1812,78 @@ namespace GCMonitor
                     memoryTexture.SetPixels(x, max, cat.width, cat.height, catPixels);
             }
         }
-
-        //public void OnGUI()
-        //{
-        //    //if (memoryGizmo && !hiddenUI)
-        //    //{
-        //    //    if (fpsLabelStyle == null)
-        //    //        fpsLabelStyle = new GUIStyle(GUI.skin.label);
-        //    //
-        //    //    fpsLabelStyle.fontSize = fpsSize;
-        //    //
-        //    //    Vector2 size = fpsLabelStyle.CalcSize(new GUIContent(memoryVszString));
-        //    //
-        //    //    Counters = Mathf.Clamp(Counters, 0, Screen.width);
-        //    //    CountersY = Mathf.Clamp(CountersY, 0, Screen.height);
-        //    //
-        //    //    fpsPos.Set(Counters, CountersY, 200, size.y);
-        //    //    if (displayMem)
-        //    //    {
-        //    //        DrawOutline(fpsPos, memoryVszString, 1, fpsLabelStyle, Color.black,
-        //    //            memoryVsz > alertMem ? Color.red : memoryVsz > warnMem ? XKCDColors.Orange : Color.white);
-        //    //        fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 200, size.y);
-        //    //    }
-        //    //
-        //    //    if (displayMemRss)
-        //    //    {
-        //    //        DrawOutline(fpsPos, memoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
-        //    //        fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
-        //    //    }
-        //    //
-        //    //    if (displayPeakRss)
-        //    //    {
-        //    //        DrawOutline(fpsPos, memoryPeakRssString, 1, fpsLabelStyle, Color.black, Color.white);
-        //    //        fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
-        //    //    }
-        //    //
-        //    //    if (displayGpu)
-        //    //    {
-        //    //        DrawOutline(fpsPos, gpuMemoryRssString, 1, fpsLabelStyle, Color.black, Color.white);
-        //    //        fpsPos.Set(fpsPos.xMin, fpsPos.yMin + size.y, 300, size.y);
-        //    //    }
-        //    //
-        //    //    if (displayFps)
-        //    //    {
-        //    //        DrawOutline(fpsPos, fpsString, 1, fpsLabelStyle, Color.black, Color.white);
-        //    //    }
-        //    //}
-
-        //    if (showUI && !hiddenUI)
-        //    {
-        //        windowPos = GUILayout.Window(8785478, windowPos, WindowGUI, "GCMonitor", GUILayout.Width(420), GUILayout.Height(220));
-        //    }
-
-        //    if (showConfUI & showUI && !hiddenUI)
-        //    {
-        //        windowConfigPos.Set(windowPos.xMax + 10, windowPos.yMin, windowConfigPos.width, windowConfigPos.height);
-        //        windowConfigPos = GUILayout.Window(8785479, windowConfigPos, WindowConfigGUI, "Config", GUILayout.Width(80), GUILayout.Height(50));
-        //    }
-        //}
-
-        public void WindowGUI(int windowID)
-        {
-            GUILayout.BeginVertical();
-
-            GUILayout.BeginHorizontal();
-
-            GUILayout.Label("Precision ", GUILayout.ExpandWidth(false));
-            // We could collect at x8 speed and then aggregate
-            // for the asked display level. But lazy
-            if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
-            {
-                if (timeScale > 1)
-                {
-                    timeScale = timeScale / 2;
-                    memoryHistory = new memoryState[width];
-                    fullUpdate = true;
-                }
-            }
-            GUILayout.Label((1f / timeScale).ToString("0.###") + "s", GUILayout.ExpandWidth(false));
-            if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
-            {
-                if (timeScale < 8)
-                {
-                    timeScale = timeScale * 2;
-                    memoryHistory = new memoryState[width];
-                    fullUpdate = true;
-                }
-            }
-            GUILayout.Space(30);
-
-            bool preveReal = realMemory;
-            realMemory = GUILayout.Toggle(realMemory, "KSP process", GUILayout.ExpandWidth(false));
-            if (preveReal != realMemory)
-            {
-                fullUpdate = true;
-                if (gpuMemory)
-                    gpuMemory = false;
-            }
-
-            bool preveGpu = gpuMemory;
-            gpuMemory = adapter != null && GUILayout.Toggle(gpuMemory, "GPU", GUILayout.ExpandWidth(false));
-            if (preveGpu != gpuMemory)
-            {
-                fullUpdate = true;
-                if (realMemory)
-                    realMemory = false;
-            }
-
-            bool preveRel = relative;
-            relative = GUILayout.Toggle(relative, "Relative Mode", GUILayout.ExpandWidth(false));
-            if (preveRel != relative)
-                fullUpdate = true;
-
-            bool prevColor = colorfulMode;
-            colorfulMode = GUILayout.Toggle(colorfulMode, "More Color Mode", GUILayout.ExpandWidth(false));
-            if (colorfulMode)
-                timeScale = 10;
-
-            if (prevColor != colorfulMode)
-                fullUpdate = true;
-
-            OnlyUpdateWhenDisplayed = GUILayout.Toggle(OnlyUpdateWhenDisplayed, "Only Update When Display is visible", GUILayout.ExpandWidth(false));
-
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-
-            processMemory mem = getProcessMemory();
-
-            GUILayout.Label("KSP: " + ConvertToKBString(mem.vsz) + " / " + ConvertToKBString(maxAllowedMem), GUILayout.ExpandWidth(false));
-            if (adapter != null)
-                GUILayout.Label("GPU: " + ConvertToKBString(adapter.DedicatedVramUsage) + " / " + ConvertToKBString(adapter.DedicatedVramLimit), GUILayout.ExpandWidth(false));
-
-            GUILayout.Space(20);
-
-            GUILayout.Label(
-                "Mono allocated:" + ConvertToMBString(Profiler.GetTotalAllocatedMemory())
-                + " min: " + ConvertToMBString(memoryHistory[activeSecond].min)
-                + " max: " + ConvertToMBString(memoryHistory[activeSecond].max)
-                + " GC : " + memoryHistory[previousActiveSecond].gc.ToString(), GUILayout.ExpandWidth(false));
-
-            GUILayout.Space(20);
-
-            GUILayout.Label("FPS: " + fps.ToString("0.0"), GUILayout.ExpandWidth(false));
-
-            GUILayout.Space(20);
-
-            if (GUILayout.Button("Top", GUILayout.ExpandWidth(false)))
-            {
-                topMemory = (long) memoryVsz;
-            }
-
-            GUILayout.Label("Since top: " + (topMemory != 0 ? ConvertToKBString(((long)memoryVsz - topMemory)) : "0"), GUILayout.ExpandWidth(true));
-
-
-            GUILayout.Space(20);
-
-            if (GUILayout.Button("Config"))
-                showConfUI = !showConfUI;
-
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal(GUILayout.Height(height));
-
-            Vector2 size = GUI.skin.label.CalcSize(new GUIContent(ConvertToMBString(displayMaxMemory)));
-
-            GUILayout.BeginVertical(GUILayout.MinWidth(size.x));
-
-            for (int i = 0; i <= GraphLabelsCount; i++)
-            {
-                GUILayout.Label(ConvertToMBString(displayMaxMemory - (displayMaxMemory - displayMinMemory) * i / GraphLabelsCount), new GUIStyle(GUI.skin.label) { wordWrap = false });
-                if (i != GraphLabelsCount) //only do it if it's not the last one
-                    GUILayout.Space(height / GraphLabelsCount - labelSpace);
-            }
-            GUILayout.EndVertical();
-
-            GUILayout.Box(memoryTexture);
-
-            GUILayout.EndHorizontal();
-
-            GUILayout.EndVertical();
-
-            GUI.DragWindow();
-        }
-
-        public void WindowConfigGUI(int windowID)
-        {
-            GUILayout.BeginVertical();
-
-            useAppLauncher = GUILayout.Toggle(useAppLauncher, "Display Launcher Icon", GUILayout.ExpandWidth(false));
-            memoryGizmo = GUILayout.Toggle(memoryGizmo, "Display KSP memoryVsz and FPS", GUILayout.ExpandWidth(false));
-
-            GUILayout.BeginHorizontal();
-            displayFps = GUILayout.Toggle(displayFps, "FPS");
-            displayMem = GUILayout.Toggle(displayMem, "Memory");
-            displayMemRss = GUILayout.Toggle(displayMemRss, "Memory (RSS)");
-            displayPeakRss = GUILayout.Toggle(displayPeakRss, "Peak");
-            if (displayPeakRss)
-                OnlyUpdateWhenDisplayed = true;
-            GUILayout.EndHorizontal();
-
-            displayGpu = adapter != null && GUILayout.Toggle(displayGpu, "Memory (GPU)");
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Size", GUILayout.Width(40));
-            if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
-            {
-                if (Event.current.button == 0)
-                    fpsSize--;
-                else if (Event.current.button == 1)
-                    fpsSize -= 10;
-            }
-            GUILayout.Label(fpsSize.ToString(), GUILayout.Width(40));
-            if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
-            {
-                if (Event.current.button == 0)
-                    fpsSize++;
-                else if (Event.current.button == 1)
-                    fpsSize += 10;
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("X", GUILayout.Width(40));
-            if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
-            {
-                if (Event.current.button == 0)
-                    CountersX--;
-                else if (Event.current.button == 1)
-                    CountersX -= 10;
-            }
-            GUILayout.Label(CountersX.ToString("F0"), GUILayout.Width(40));
-            if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
-            {
-                if (Event.current.button == 0)
-                    CountersX++;
-                else if (Event.current.button == 1)
-                    CountersX += 10;
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Y", GUILayout.Width(40));
-            if (GUILayout.Button("-", GUILayout.ExpandWidth(false)))
-            {
-                if (Event.current.button == 0)
-                    CountersY--;
-                else if (Event.current.button == 1)
-                    CountersY -= 10;;
-            }
-            GUILayout.Label(CountersY.ToString("F0"), GUILayout.Width(40));
-            if (GUILayout.Button("+", GUILayout.ExpandWidth(false)))
-            {
-                if (Event.current.button == 0)
-                    CountersY++;
-                else if (Event.current.button == 1)
-                    CountersY += 10;
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.EndVertical();
-
-            CountersX = Mathf.Clamp(CountersX, 0, Screen.width);
-            CountersY = Mathf.Clamp(CountersY, 0, Screen.height);
-        }
-
+        
         static String ConvertToGBString(long bytes)
         {
-            return StringFormater.Format("{0:#,0.0} GB", bytes / 1024f / 1024f / 1024f);
+            //return StringFormater.Format("{0:#,0.0} GB", bytes / 1024f / 1024f / 1024f);
+            return StringFormater.ConcatFormat("{0:0.0} GB", bytes / 1024f / 1024f / 1024f);
         }
-
+        
         static String ConvertToGBString(ulong bytes)
         {
-            return StringFormater.Format("{0:#,0.0} GB", (bytes >> 20) / 1024f);
+            //return StringFormater.Format("{0:#,0.0} GB", (bytes >> 20) / 1024f);
+            return StringFormater.ConcatFormat("{0:0.0} GB", (bytes >> 20) / 1024f);
         }
-
+        
         static String ConvertToMBString(long bytes)
         {
-            return StringFormater.Format(spaceFormat, "{0:#,0} MB", bytes / 1024f / 1024f);
+            //return StringFormater.Format(spaceFormat, "{0:#,0} MB", bytes / 1024f / 1024f);
+            return StringFormater.ConcatFormat("{0:0.} MB", bytes / 1024f / 1024f);
         }
-
+        
         static String ConvertToMBString(ulong bytes)
         {
-            return StringFormater.Format(spaceFormat, "{0:#,0} MB", bytes >> 20);
+            //return StringFormater.Format(spaceFormat, "{0:#,0} MB", bytes >> 20);
+            return StringFormater.ConcatFormat("{0.} MB", bytes >> 20);
         }
-
+        
         static String ConvertToKBString(long bytes)
         {
-            return StringFormater.Format(spaceFormat, "{0:#,0} kB", bytes / 1024f);
+            //return StringFormater.Format(spaceFormat, "{0:#,0} kB", bytes / 1024f);
+            return StringFormater.ConcatFormat("{0:0.} kB", bytes / 1024f);
         }
-
+        
         static String ConvertToKBString(ulong bytes)
         {
-            return StringFormater.Format(spaceFormat, "{0:#,0} kB", bytes >> 10);
+            //return StringFormater.Format(spaceFormat, "{0:#,0} kB", bytes >> 10);
+            return StringFormater.ConcatFormat("{0:0.} kB", bytes >> 10);
+        }
+
+        // **************
+        static float ConvertToGB(long bytes)
+        {
+            //return StringFormater.Format("{0:#,0.0} GB", bytes / 1024f / 1024f / 1024f);
+            return bytes / 1024f / 1024f / 1024f;
+        }
+
+        static float ConvertToGB(ulong bytes)
+        {
+            //return StringFormater.Format("{0:#,0.0} GB", (bytes >> 20) / 1024f);
+            return (bytes >> 20) / 1024f;
+        }
+
+        static long ConvertToMB(long bytes)
+        {
+            //return StringFormater.Format(spaceFormat, "{0:#,0} MB", bytes / 1024f / 1024f);
+            return bytes / 1024 / 1024;
+        }
+
+        static ulong ConvertToMB(ulong bytes)
+        {
+            //return StringFormater.Format(spaceFormat, "{0:#,0} MB", bytes >> 20);
+            return  bytes >> 20;
+        }
+
+        static long ConvertToKB(long bytes)
+        {
+            //return StringFormater.Format(spaceFormat, "{0:#,0} kB", bytes / 1024f);
+            return bytes / 1024;
+        }
+
+        static ulong ConvertToKB(ulong bytes)
+        {
+            //return StringFormater.Format(spaceFormat, "{0:#,0} kB", bytes >> 10);
+            return  bytes >> 10;
         }
 
         public new static void print(object message)
