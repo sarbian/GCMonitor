@@ -18,49 +18,49 @@ namespace GCMonitor
     public static partial class StringBuilderExtensions
     {
 
-		//! Concatenate a formatted string with arguments
-		public static StringBuilder ConcatFormat<A>( this StringBuilder string_builder, String format_string, A arg1 )
+        //! Concatenate a formatted string with arguments
+        public static StringBuilder ConcatFormat<A>( this StringBuilder string_builder, String format_string, A arg1 )
             where A : IConvertible
         {
-			return string_builder.ConcatFormat<A, int, int, int>( format_string, arg1, 0, 0, 0 );
+            return string_builder.ConcatFormat<A, int, int, int>( format_string, arg1, 0, 0, 0 );
         }
 
-		//! Concatenate a formatted string with arguments
-		public static StringBuilder ConcatFormat<A, B>( this StringBuilder string_builder, String format_string, A arg1, B arg2 )
+        //! Concatenate a formatted string with arguments
+        public static StringBuilder ConcatFormat<A, B>( this StringBuilder string_builder, String format_string, A arg1, B arg2 )
             where A : IConvertible
             where B : IConvertible
         {
-			return string_builder.ConcatFormat<A, B, int, int>( format_string, arg1, arg2, 0, 0 );
+            return string_builder.ConcatFormat<A, B, int, int>( format_string, arg1, arg2, 0, 0 );
         }
 
-		//! Concatenate a formatted string with arguments
-		public static StringBuilder ConcatFormat<A, B, C>( this StringBuilder string_builder, String format_string, A arg1, B arg2, C arg3 )
+        //! Concatenate a formatted string with arguments
+        public static StringBuilder ConcatFormat<A, B, C>( this StringBuilder string_builder, String format_string, A arg1, B arg2, C arg3 )
             where A : IConvertible
             where B : IConvertible
             where C : IConvertible
         {
-			return string_builder.ConcatFormat<A, B, C, int>( format_string, arg1, arg2, arg3, 0 );
+            return string_builder.ConcatFormat<A, B, C, int>( format_string, arg1, arg2, arg3, 0 );
         }
 
-		//! Concatenate a formatted string with arguments
+        //! Concatenate a formatted string with arguments
         public static StringBuilder ConcatFormat<A,B,C,D>( this StringBuilder string_builder, String format_string, A arg1, B arg2, C arg3, D arg4 )
             where A : IConvertible
             where B : IConvertible
             where C : IConvertible
             where D : IConvertible
         {
-			int verbatim_range_start = 0;
+            int verbatim_range_start = 0;
 
-			for ( int index = 0; index < format_string.Length; index++ )
+            for ( int index = 0; index < format_string.Length; index++ )
             {
-				if ( format_string[index] == '{' )
+                if ( format_string[index] == '{' )
                 {
-					// Formatting bit now, so make sure the last block of the string is written out verbatim.
-					if ( verbatim_range_start < index )
-					{
-						// Write out unformatted string portion
-						string_builder.Append( format_string, verbatim_range_start, index - verbatim_range_start );
-					}
+                    // Formatting bit now, so make sure the last block of the string is written out verbatim.
+                    if ( verbatim_range_start < index )
+                    {
+                        // Write out unformatted string portion
+                        string_builder.Append( format_string, verbatim_range_start, index - verbatim_range_start );
+                    }
 
                     uint base_value = 10;
                     uint padding = 0;
@@ -137,41 +137,41 @@ namespace GCMonitor
                         }
                     }
 
-					// Update the verbatim range, start of a new section now
-					verbatim_range_start = ( index + 1 );
+                    // Update the verbatim range, start of a new section now
+                    verbatim_range_start = ( index + 1 );
                 }
-			}
+            }
 
-			// Anything verbatim to write out?
-			if ( verbatim_range_start < format_string.Length )
-			{
-				// Write out unformatted string portion
-				string_builder.Append( format_string, verbatim_range_start, format_string.Length - verbatim_range_start );
-			}
+            // Anything verbatim to write out?
+            if ( verbatim_range_start < format_string.Length )
+            {
+                // Write out unformatted string portion
+                string_builder.Append( format_string, verbatim_range_start, format_string.Length - verbatim_range_start );
+            }
 
             return string_builder;
         }
 
-		//! The worker method. This does a garbage-free conversion of a generic type, and uses the garbage-free Concat() to add to the stringbuilder
-		private static void ConcatFormatValue<T>( this StringBuilder string_builder, T arg, uint padding, uint base_value, uint decimal_places ) where T : IConvertible
-		{
-			switch ( arg.GetTypeCode() )
-			{
-				case System.TypeCode.String:
-					{
-						string_builder.Append( Convert.ToString( arg ) );
-						break;
-					}
-			    case TypeCode.Boolean:
+        //! The worker method. This does a garbage-free conversion of a generic type, and uses the garbage-free Concat() to add to the stringbuilder
+        private static void ConcatFormatValue<T>( this StringBuilder string_builder, T arg, uint padding, uint base_value, uint decimal_places ) where T : IConvertible
+        {
+            switch ( arg.GetTypeCode() )
+            {
+                case System.TypeCode.String:
+                    {
+                        string_builder.Append( Convert.ToString( arg ) );
+                        break;
+                    }
+                case TypeCode.Boolean:
                     MonoBehaviour.print("Boolean");
                     break;
-			    case TypeCode.Char:
+                case TypeCode.Char:
                     MonoBehaviour.print("Char");
                     break;
-			    case TypeCode.SByte:
+                case TypeCode.SByte:
                     MonoBehaviour.print("SByte");
                     break;
-			    case TypeCode.Byte:
+                case TypeCode.Byte:
                     MonoBehaviour.print("Byte");
                     break;
                 case TypeCode.Int16:
@@ -196,19 +196,19 @@ namespace GCMonitor
                 case TypeCode.Double:
                     string_builder.Concat(arg.ToDouble(System.Globalization.NumberFormatInfo.CurrentInfo), decimal_places, padding, '0');
                     break;
-			    case TypeCode.Decimal:
+                case TypeCode.Decimal:
                     MonoBehaviour.print("Decimal");
                     break;
-			    case TypeCode.DateTime:
+                case TypeCode.DateTime:
                     MonoBehaviour.print("DateTime");
                     break;
-			    default:
-					{
-						MonoBehaviour.print("Unknown parameter type" );
-						break;
-					}
-			}
-		}
+                default:
+                    {
+                        MonoBehaviour.print("Unknown parameter type" );
+                        break;
+                    }
+            }
+        }
 
     }
 }
