@@ -10,7 +10,8 @@
 
 using System;
 using System.Text;
-using System.Diagnostics;
+using UnityEngine;
+using Debug = System.Diagnostics.Debug;
 
 namespace GCMonitor
 {
@@ -24,14 +25,13 @@ namespace GCMonitor
         private static readonly char	ms_default_pad_char = '0';
 
         //! Convert a given unsigned integer value to a string and concatenate onto the stringbuilder. Any base value allowed.
-        public static StringBuilder Concat( this StringBuilder string_builder, ulong uint_val, uint pad_amount, char pad_char, uint base_val )
+        public static StringBuilder Concat( this StringBuilder string_builder, ulong ulong_val, uint pad_amount, char pad_char, bool thousand_sep, uint base_val )
         {
-            Debug.Assert( pad_amount >= 0 );
             Debug.Assert( base_val > 0 && base_val <= 16 );
 
             // Calculate length of integer when written out
             uint length = 0;
-            ulong length_calc = uint_val;
+            ulong length_calc = ulong_val;
 
             do
             {
@@ -40,8 +40,14 @@ namespace GCMonitor
             }
             while ( length_calc > 0 );
 
+            if (thousand_sep)
+                length += (length - 1) / 3;
+
+            //uint str_length = thousand_sep ? length + (length - 1) / 3 : length;
+            uint str_length = length;
+
             // Pad out space for writing.
-            string_builder.Append( pad_char, (int)Math.Max( pad_amount, length ));
+            string_builder.Append( pad_char, (int)Math.Max( pad_amount, length));
 
             int strpos = string_builder.Length;
 
@@ -50,10 +56,17 @@ namespace GCMonitor
             {
                 strpos--;
 
-                // Lookup from static char array, to cover hex values too
-                string_builder[strpos] = ms_digits[uint_val % base_val];
+                if (thousand_sep && (str_length - length) % 4 == 3)
+                {
+                    string_builder[strpos] = ' ';
+                }
+                else
+                {
+                    // Lookup from static char array, to cover hex values too
+                    string_builder[strpos] = ms_digits[ulong_val % base_val];
 
-                uint_val /= base_val;
+                    ulong_val /= base_val;
+                }
                 length--;
             }
 
@@ -61,30 +74,36 @@ namespace GCMonitor
         }
 
         //! Convert a given unsigned integer value to a string and concatenate onto the stringbuilder. Assume no padding and base ten.
-        public static StringBuilder Concat( this StringBuilder string_builder, ulong uint_val )
+        public static StringBuilder Concat( this StringBuilder string_builder, ulong ulong_val )
         {
-            string_builder.Concat( uint_val, 0, ms_default_pad_char, 10 );
+            string_builder.Concat( ulong_val, 0, ms_default_pad_char, false, 10 );
             return string_builder;
         }
 
         //! Convert a given unsigned integer value to a string and concatenate onto the stringbuilder. Assume base ten.
-        public static StringBuilder Concat( this StringBuilder string_builder, ulong uint_val, uint pad_amount )
+        public static StringBuilder Concat( this StringBuilder string_builder, ulong ulong_val, uint pad_amount )
         {
-            string_builder.Concat( uint_val, pad_amount, ms_default_pad_char, 10 );
+            string_builder.Concat( ulong_val, pad_amount, ms_default_pad_char, false, 10 );
             return string_builder;
         }
 
         //! Convert a given unsigned integer value to a string and concatenate onto the stringbuilder. Assume base ten.
-        public static StringBuilder Concat( this StringBuilder string_builder, ulong uint_val, uint pad_amount, char pad_char )
+        public static StringBuilder Concat( this StringBuilder string_builder, ulong ulong_val, uint pad_amount, char pad_char )
         {
-            string_builder.Concat( uint_val, pad_amount, pad_char, 10 );
+            string_builder.Concat( ulong_val, pad_amount, pad_char, false, 10 );
+            return string_builder;
+        }
+
+        //! Convert a given unsigned integer value to a string and concatenate onto the stringbuilder. Assume base ten.
+        public static StringBuilder Concat(this StringBuilder string_builder, ulong ulong_val, uint pad_amount, char pad_char, bool thousand_sep)
+        {
+            string_builder.Concat(ulong_val, pad_amount, pad_char, thousand_sep, 10);
             return string_builder;
         }
 
         //! Convert a given signed integer value to a string and concatenate onto the stringbuilder. Any base value allowed.
-        public static StringBuilder Concat( this StringBuilder string_builder, long int_val, uint pad_amount, char pad_char, uint base_val )
+        public static StringBuilder Concat( this StringBuilder string_builder, long int_val, uint pad_amount, char pad_char, bool thousand_sep, uint base_val )
         {
-            Debug.Assert( pad_amount >= 0 );
             Debug.Assert( base_val > 0 && base_val <= 16 );
 
             // Deal with negative numbers
@@ -92,151 +111,59 @@ namespace GCMonitor
             {
                 string_builder.Append( '-' );
                 ulong uint_val = ulong.MaxValue - ((ulong) int_val ) + 1; //< This is to deal with Int32.MinValue
-                string_builder.Concat( uint_val, pad_amount, pad_char, base_val );
+                string_builder.Concat( uint_val, pad_amount, pad_char, thousand_sep, base_val );
             }
             else
             {
-                string_builder.Concat((ulong)int_val, pad_amount, pad_char, base_val );
+                string_builder.Concat((ulong)int_val, pad_amount, pad_char, thousand_sep, base_val );
             }
 
             return string_builder;
         }
 
         //! Convert a given signed integer value to a string and concatenate onto the stringbuilder. Assume no padding and base ten.
-        public static StringBuilder Concat( this StringBuilder string_builder, int int_val )
+        public static StringBuilder Concat( this StringBuilder string_builder, long int_val )
         {
-            string_builder.Concat( int_val, 0, ms_default_pad_char, 10 );
+            string_builder.Concat( int_val, 0, ms_default_pad_char, false, 10 );
             return string_builder;
         }
 
         //! Convert a given signed integer value to a string and concatenate onto the stringbuilder. Assume base ten.
-        public static StringBuilder Concat( this StringBuilder string_builder, int int_val, uint pad_amount )
+        public static StringBuilder Concat( this StringBuilder string_builder, long int_val, uint pad_amount )
         {
-            string_builder.Concat( int_val, pad_amount, ms_default_pad_char, 10 );
+            string_builder.Concat( int_val, pad_amount, ms_default_pad_char, false, 10 );
             return string_builder;
         }
 
         //! Convert a given signed integer value to a string and concatenate onto the stringbuilder. Assume base ten.
-        public static StringBuilder Concat( this StringBuilder string_builder, int int_val, uint pad_amount, char pad_char )
+        public static StringBuilder Concat( this StringBuilder string_builder, long int_val, uint pad_amount, char pad_char )
         {
-            string_builder.Concat( int_val, pad_amount, pad_char, 10 );
+            string_builder.Concat( int_val, pad_amount, pad_char, false, 10 );
             return string_builder;
         }
 
-        //! Convert a given float value to a string and concatenate onto the stringbuilder
-        public static StringBuilder Concat( this StringBuilder string_builder, float float_val, uint decimal_places, uint pad_amount, char pad_char )
+        public static StringBuilder Concat(this StringBuilder string_builder, long int_val, uint pad_amount, char pad_char, bool thousand_sep)
         {
-            Debug.Assert( pad_amount >= 0 );
-
-            if ( decimal_places == 0 )
-            {
-                // No decimal places, just round up and print it as an int
-
-                // Agh, Math.Floor() just works on doubles/decimals. Don't want to cast! Let's do this the old-fashioned way.
-                int int_val;
-                if ( float_val >= 0.0f )
-                {
-                    // Round up
-                    int_val = (int)( float_val + 0.5f );
-                }
-                else
-                {
-                    // Round down for negative numbers
-                    int_val = (int)( float_val - 0.5f );
-                }
-
-                string_builder.Concat( int_val, pad_amount, pad_char, 10 );
-            }
-            else
-            {
-                int int_part = (int)float_val;
-
-                // First part is easy, just cast to an integer
-                string_builder.Concat( int_part, pad_amount, pad_char, 10 );
-
-                // Decimal point
-                string_builder.Append( '.' );
-
-                // Work out remainder we need to print after the d.p.
-                float remainder = Math.Abs( float_val - int_part );
-
-                //Leading zeros in the decimal portion
-                remainder *= 10;
-                decimal_places--;
-                while (decimal_places > 0 && ((uint)remainder % 10) == 0)
-                {
-                    remainder *= 10;
-                    decimal_places--;
-                    string_builder.Append('0');
-                }
-                // Multiply up to become an int that we can print
-                while (decimal_places > 0)
-                {
-                    remainder *= 10;
-                    decimal_places--;
-                }
-
-                // Round up. It's guaranteed to be a positive number, so no extra work required here.
-                remainder += 0.5f;
-
-                // All done, print that as an int!
-                string_builder.Concat( (uint)remainder, 0, '0', 10 );
-            }
-            return string_builder;
-        }
-        
-        //! Convert a given float value to a string and concatenate onto the stringbuilder. Assumes five decimal places, and no padding.
-        public static StringBuilder Concat(this StringBuilder string_builder, float float_val)
-        {
-            string_builder.Concat(float_val, ms_default_decimal_places, 0, ms_default_pad_char);
+            string_builder.Concat(int_val, pad_amount, pad_char, thousand_sep, 10);
             return string_builder;
         }
 
-        //! Convert a given float value to a string and concatenate onto the stringbuilder. Assumes no padding.
-        public static StringBuilder Concat( this StringBuilder string_builder, float float_val, uint decimal_places )
+        //! Convert a given double value to a string and concatenate onto the stringbuilder
+        public static StringBuilder Concat(this StringBuilder string_builder, double double_val, uint decimal_places, uint pad_amount, char pad_char, bool thousand_sep)
         {
-            string_builder.Concat (float_val, decimal_places, 0, ms_default_pad_char );
-            return string_builder;
-        }
-
-        //! Convert a given float value to a string and concatenate onto the stringbuilder.
-        public static StringBuilder Concat(this StringBuilder string_builder, float float_val, uint decimal_places, uint pad_amount)
-        {
-            string_builder.Concat(float_val, decimal_places, pad_amount, ms_default_pad_char);
-            return string_builder;
-        }
-
-
-        //! Convert a given float value to a string and concatenate onto the stringbuilder
-        public static StringBuilder Concat(this StringBuilder string_builder, double double_val, uint decimal_places, uint pad_amount, char pad_char)
-        {
-            Debug.Assert(pad_amount >= 0);
-
             if (decimal_places == 0)
             {
                 // No decimal places, just round up and print it as an int
+                long int_val = (long) Math.Floor(double_val);
 
-                // Agh, Math.Floor() just works on doubles/decimals. Don't want to cast! Let's do this the old-fashioned way.
-                long int_val;
-                if (double_val >= 0.0f)
-                {
-                    // Round up
-                    int_val = (long)(double_val + 0.5f);
-                }
-                else
-                {
-                    // Round down for negative numbers
-                    int_val = (long)(double_val - 0.5f);
-                }
-
-                string_builder.Concat(int_val, pad_amount, pad_char, 10);
+                string_builder.Concat(int_val, pad_amount, ' ', thousand_sep, 10);
             }
             else
             {
                 long int_part = (long)double_val;
 
                 // First part is easy, just cast to an integer
-                string_builder.Concat(int_part, pad_amount, pad_char, 10);
+                string_builder.Concat(int_part, pad_amount, ' ', thousand_sep, 10);
 
                 // Decimal point
                 string_builder.Append('.');
@@ -244,6 +171,8 @@ namespace GCMonitor
                 // Work out remainder we need to print after the d.p.
                 double remainder = Math.Abs(double_val - int_part);
 
+                double r = remainder;
+
                 //Leading zeros in the decimal portion
                 remainder *= 10;
                 decimal_places--;
@@ -261,10 +190,15 @@ namespace GCMonitor
                 }
 
                 // Round up. It's guaranteed to be a positive number, so no extra work required here.
-                remainder += 0.5f;
+                // Commented since it adds a 0 for numbers like 0.96 ( prints 0.10 instead of 0.1)
+                // Good enough for my use...
+                //remainder += 0.5f;
+
+                if ((ulong)remainder > 9)
+                    MonoBehaviour.print("Wrong "   + (ulong)remainder + " " + remainder.ToString("F5") + " " +r.ToString("F5") + " "+ double_val.ToString("F5"));
 
                 // All done, print that as an int!
-                string_builder.Concat((ulong)remainder, 0, '0', 10);
+                string_builder.Concat((ulong)remainder, 0, '0', false, 10);
             }
             return string_builder;
         }
@@ -272,28 +206,29 @@ namespace GCMonitor
         //! Convert a given float value to a string and concatenate onto the stringbuilder. Assumes five decimal places, and no padding.
         public static StringBuilder Concat(this StringBuilder string_builder, double double_val)
         {
-            string_builder.Concat(double_val, ms_default_decimal_places, 0, ms_default_pad_char);
+            string_builder.Concat(double_val, ms_default_decimal_places, 0, ms_default_pad_char, false);
             return string_builder;
         }
 
         //! Convert a given float value to a string and concatenate onto the stringbuilder. Assumes no padding.
         public static StringBuilder Concat(this StringBuilder string_builder, double double_val, uint decimal_places)
         {
-            string_builder.Concat(double_val, decimal_places, 0, ms_default_pad_char);
+            string_builder.Concat(double_val, decimal_places, 0, ms_default_pad_char, false);
             return string_builder;
         }
 
         //! Convert a given float value to a string and concatenate onto the stringbuilder.
         public static StringBuilder Concat(this StringBuilder string_builder, double double_val, uint decimal_places, uint pad_amount)
         {
-            string_builder.Concat(double_val, decimal_places, pad_amount, ms_default_pad_char);
+            string_builder.Concat(double_val, decimal_places, pad_amount, ms_default_pad_char, false);
             return string_builder;
         }
 
-
-
-
-
-
+        //! Convert a given float value to a string and concatenate onto the stringbuilder.
+        public static StringBuilder Concat(this StringBuilder string_builder, double double_val, uint decimal_places, uint pad_amount, char pad_char)
+        {
+            string_builder.Concat(double_val, decimal_places, pad_amount, pad_char, false);
+            return string_builder;
+        }
     }
 }

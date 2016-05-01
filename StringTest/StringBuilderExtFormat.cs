@@ -129,10 +129,10 @@ namespace GCMonitor
                         // Have any extended settings now, so just print out the particular argument they wanted
                         switch ( format_char )
                         {
-                            case '0': string_builder.ConcatFormatValue<A>( arg1, padding, base_value, decimal_places ); break;
-                            case '1': string_builder.ConcatFormatValue<B>( arg2, padding, base_value, decimal_places ); break;
-                            case '2': string_builder.ConcatFormatValue<C>( arg3, padding, base_value, decimal_places ); break;
-                            case '3': string_builder.ConcatFormatValue<D>( arg4, padding, base_value, decimal_places ); break;
+                            case '0': string_builder.ConcatFormatValue<A>( arg1, padding, base_value, decimal_places, true ); break;
+                            case '1': string_builder.ConcatFormatValue<B>( arg2, padding, base_value, decimal_places, true ); break;
+                            case '2': string_builder.ConcatFormatValue<C>( arg3, padding, base_value, decimal_places, true ); break;
+                            case '3': string_builder.ConcatFormatValue<D>( arg4, padding, base_value, decimal_places, true ); break;
                             default: Debug.Assert(false, "Invalid parameter index"); break;
                         }
                     }
@@ -153,7 +153,7 @@ namespace GCMonitor
         }
 
         //! The worker method. This does a garbage-free conversion of a generic type, and uses the garbage-free Concat() to add to the stringbuilder
-        private static void ConcatFormatValue<T>( this StringBuilder string_builder, T arg, uint padding, uint base_value, uint decimal_places ) where T : IConvertible
+        private static void ConcatFormatValue<T>( this StringBuilder string_builder, T arg, uint padding, uint base_value, uint decimal_places, bool thousand_sep) where T : IConvertible
         {
             switch ( arg.GetTypeCode() )
             {
@@ -178,23 +178,23 @@ namespace GCMonitor
                 case System.TypeCode.Int32:
                 case TypeCode.Int64:
                     {
-                        string_builder.Concat(arg.ToInt64(System.Globalization.NumberFormatInfo.CurrentInfo), padding, '0', base_value);
+                        string_builder.Concat(arg.ToInt64(System.Globalization.NumberFormatInfo.CurrentInfo), padding, ' ', thousand_sep, base_value);
                         break;
                     }
                 case TypeCode.UInt16:
                 case System.TypeCode.UInt32:
                 case TypeCode.UInt64:
                     {
-                        string_builder.Concat(arg.ToUInt64(System.Globalization.NumberFormatInfo.CurrentInfo), padding, '0', base_value);
+                        string_builder.Concat(arg.ToUInt64(System.Globalization.NumberFormatInfo.CurrentInfo), padding, ' ', thousand_sep, base_value);
                         break;
                     }
                 case System.TypeCode.Single:
                     {
-                        string_builder.Concat(arg.ToSingle(System.Globalization.NumberFormatInfo.CurrentInfo), decimal_places, padding, '0');
+                        string_builder.Concat(arg.ToSingle(System.Globalization.NumberFormatInfo.CurrentInfo), decimal_places, padding, '0', thousand_sep);
                         break;
                     }
                 case TypeCode.Double:
-                    string_builder.Concat(arg.ToDouble(System.Globalization.NumberFormatInfo.CurrentInfo), decimal_places, padding, '0');
+                    string_builder.Concat(arg.ToDouble(System.Globalization.NumberFormatInfo.CurrentInfo), decimal_places, padding, '0', thousand_sep);
                     break;
                 case TypeCode.Decimal:
                     MonoBehaviour.print("Decimal");

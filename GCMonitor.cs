@@ -1242,7 +1242,7 @@ namespace GCMonitor
             infoKSP.text = StringFormater.ConcatFormat("KSP: {0} kB / {1} kB", ConvertToKB(mem.vsz), ConvertToKB(maxAllowedMem));
             infoGPU.text = (adapter != null) ? StringFormater.ConcatFormat("GPU: {0} kB / {1} kB", ConvertToKB(adapter.DedicatedVramUsage), ConvertToKB(adapter.DedicatedVramLimit)) : "N/A";
             infoMono.text = StringFormater.ConcatFormat("Mono allocated:{0} MB min: {1} MB max: {2} MB GC : {3} MB", ConvertToMB(Profiler.GetTotalAllocatedMemory()), ConvertToMB(memoryHistory[activeSecond].min), ConvertToMB(memoryHistory[activeSecond].max), memoryHistory[previousActiveSecond].gc);
-            infoFPS.text = StringFormater.ConcatFormat("FPS: {0:0.0}", fps);
+            infoFPS.text = StringFormater.ConcatFormat("FPS: {0:000.0}", fps);
             topLabel.text = StringFormater.ConcatFormat("Since top: {0} kB", (topMemory != 0 ? ConvertToKB(((long)memoryVsz - topMemory)) : 0));
             
             for (int i = 0; i <= GraphLabelsCount; i++)
@@ -1333,7 +1333,7 @@ namespace GCMonitor
             {
                 CalculateFPS();
    
-                memFpsText.text = StringFormater.ConcatFormat("{0:0.0} FPS", fps);
+                memFpsText.text = StringFormater.ConcatFormat("{0:000.0} FPS", fps);
                 
                 memFpsText.fontSize = fpsSize;
                 timeleft = updateInterval;
