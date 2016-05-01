@@ -1340,7 +1340,16 @@ namespace GCMonitor
             memGpuText.gameObject.SetActive(memoryGizmo && displayGpu && adapter != null);
             memFpsText.gameObject.SetActive(memoryGizmo && displayFps);
 
-            panelPos.localPosition = new Vector3((-(Screen.width >> 1) + CountersX) / GameSettings.UI_SCALE, ((Screen.height >> 1) - CountersY) / GameSettings.UI_SCALE, 0);
+            // Technically a stock problem Hopefully I won't break other mods...
+            if (HighLogic.LoadedScene == GameScenes.LOADING)
+            {
+                UIMasterController.Instance.appCanvas.scaleFactor = GameSettings.UI_SCALE_APPS;
+            }
+
+            float scale = 1 / UIMasterController.Instance.appCanvas.scaleFactor;
+            scale = scale / GameSettings.UI_SCALE;
+
+            panelPos.localPosition = new Vector3((-(Screen.width >> 1) + CountersX) * scale, ((Screen.height >> 1) - CountersY) * scale, 0);
 
             Profiler.EndSample();
 
