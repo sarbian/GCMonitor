@@ -1238,17 +1238,28 @@ namespace GCMonitor
 
             if (!showUI)
                 return;
-            
+            Profiler.BeginSample("infoKSP");
             infoKSP.text = StringFormater.ConcatFormat("KSP: {0} kB / {1} kB", ConvertToKB(mem.vsz), ConvertToKB(maxAllowedMem));
+            Profiler.EndSample();
+            Profiler.BeginSample("infoGPU");
             infoGPU.text = (adapter != null) ? StringFormater.ConcatFormat("GPU: {0} kB / {1} kB", ConvertToKB(adapter.DedicatedVramUsage), ConvertToKB(adapter.DedicatedVramLimit)) : "N/A";
-            infoMono.text = StringFormater.ConcatFormat("Mono allocated:{0} MB min: {1} MB max: {2} MB GC : {3} MB", ConvertToMB(Profiler.GetTotalAllocatedMemory()), ConvertToMB(memoryHistory[activeSecond].min), ConvertToMB(memoryHistory[activeSecond].max), memoryHistory[previousActiveSecond].gc);
+            Profiler.EndSample();
+            Profiler.BeginSample("infoMono");
+            memoryState memoryState = memoryHistory[activeSecond];
+            infoMono.text = StringFormater.ConcatFormat("Mono allocated:{0} MB min: {1} MB max: {2} MB GC : {3} MB", ConvertToMB(Profiler.GetTotalAllocatedMemory()), ConvertToMB(memoryState.min), ConvertToMB(memoryState.max), memoryState.gc);
+            Profiler.EndSample();
+            Profiler.BeginSample("infoFPS");
             infoFPS.text = StringFormater.ConcatFormat("FPS: {0:000.0}", fps);
+            Profiler.EndSample();
+            Profiler.BeginSample("topLabel");
             topLabel.text = StringFormater.ConcatFormat("Since top: {0} kB", (topMemory != 0 ? ConvertToKB(((long)memoryVsz - topMemory)) : 0));
-            
+            Profiler.EndSample();
+            Profiler.BeginSample("graphLabels");
             for (int i = 0; i <= GraphLabelsCount; i++)
             {
                 graphLabels[i].text = StringFormater.ConcatFormat("{0} MB", ConvertToMB(displayMaxMemory - (displayMaxMemory - displayMinMemory) * i / GraphLabelsCount));
             }
+            Profiler.EndSample();
         }
         
         void InitializeBuffer()
@@ -1320,6 +1331,8 @@ namespace GCMonitor
 
                 UILoad();
             }
+
+            Profiler.BeginSample("SetActives");
             
             memVszText.gameObject.SetActive(memoryGizmo && displayMem);
             memRssText.gameObject.SetActive(memoryGizmo && displayMemRss);
@@ -1328,6 +1341,10 @@ namespace GCMonitor
             memFpsText.gameObject.SetActive(memoryGizmo && displayFps);
 
             panelPos.localPosition = new Vector3((-(Screen.width >> 1) + CountersX) / GameSettings.UI_SCALE, ((Screen.height >> 1) - CountersY) / GameSettings.UI_SCALE, 0);
+
+            Profiler.EndSample();
+
+            Profiler.BeginSample("FPS");
 
             if (displayFps && timeleft <= 0f)
             {
@@ -1338,7 +1355,7 @@ namespace GCMonitor
                 memFpsText.fontSize = fpsSize;
                 timeleft = updateInterval;
             }
-
+            Profiler.EndSample();
 
             //Profiler.BeginSample("ConcatFormat");
             //for (int i = 0; i < 100; i++)
@@ -1354,9 +1371,12 @@ namespace GCMonitor
             //}
             //Profiler.EndSample();
 
+            Profiler.BeginSample("getProcessMemory");
 
             processMemory memory = getProcessMemory();
-            
+            Profiler.EndSample();
+
+            Profiler.BeginSample("displays");
             if (displayMem)
             {
                 memoryVsz = memory.vsz;
@@ -1387,8 +1407,12 @@ namespace GCMonitor
                 memGpuText.fontSize = fpsSize;
             }
 
+            Profiler.EndSample();
+
             lmb = lmb | Input.GetMouseButtonDown(0);
             rmb = rmb | Input.GetMouseButtonDown(1);
+
+            Profiler.BeginSample("UpdateButton");
 
             UpdateButton();
 
@@ -1406,6 +1430,8 @@ namespace GCMonitor
             //{
             //    KillAllHumans();
             //}
+
+            Profiler.EndSample();
 
             UIUpdate(memory);
 
