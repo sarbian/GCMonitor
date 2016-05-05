@@ -55,7 +55,7 @@ namespace GCMonitor
 
         private bool hiddenUI = false;
 
-        readonly Texture2D memoryTexture = new Texture2D(width, height);
+        readonly Texture2D memoryTexture = new Texture2D(width, height, TextureFormat.ARGB32, false);
         float ratio;
 
         private int _timeScale = 1;
