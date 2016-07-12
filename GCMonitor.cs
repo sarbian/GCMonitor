@@ -2043,17 +2043,17 @@ namespace GCMonitor
             }
             #endregion
             #region Methods
-            public void UpdateValues()
+            unsafe public void UpdateValues()
             {
                 //Check for Video Memory
                 D3DKMT_QUERYSTATISTICS queryStatistics = new D3DKMT_QUERYSTATISTICS();
                 queryStatistics.Type = D3DKMT_QUERYSTATISTICS_TYPE.D3DKMT_QUERYSTATISTICS_ADAPTER;
                 queryStatistics.AdapterLuid = Luid;
-                IntPtr queryStatisticsPtr = Marshal.AllocHGlobal(Marshal.SizeOf(queryStatistics)); //Allocate unmanaged Memory
-                Marshal.StructureToPtr(queryStatistics, queryStatisticsPtr, true);
-                if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics(queryStatisticsPtr)))
+
+                D3DKMT_QUERYSTATISTICS* ptr = &queryStatistics;
+
+                if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics((IntPtr)ptr)))
                 {
-                    queryStatistics = (D3DKMT_QUERYSTATISTICS)Marshal.PtrToStructure(queryStatisticsPtr, typeof(D3DKMT_QUERYSTATISTICS));
                     uint segmentCount = queryStatistics.QueryResult.AdapterInformation.NbSegments;
 
                     ulong GpuSharedLimit = 0;
@@ -2070,10 +2070,8 @@ namespace GCMonitor
                         queryStatistics.Type = D3DKMT_QUERYSTATISTICS_TYPE.D3DKMT_QUERYSTATISTICS_SEGMENT;
                         queryStatistics.AdapterLuid = Luid;
                         queryStatistics.QueryUnion.QuerySegment.SegmentId = i;
-                        Marshal.StructureToPtr(queryStatistics, queryStatisticsPtr, true);
-                        if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics(queryStatisticsPtr)))
+                        if (D3DKMT.Nt_Success(D3DKMT.D3DKMTQueryStatistics((IntPtr)ptr)))
                         {
-                            queryStatistics = (D3DKMT_QUERYSTATISTICS)Marshal.PtrToStructure(queryStatisticsPtr, typeof(D3DKMT_QUERYSTATISTICS));
                             UInt64 commitLimit;
                             UInt32 aperture; //Boolean; For System and Graphics
                             UInt64 bytesCommitted;
@@ -2107,8 +2105,6 @@ namespace GCMonitor
                     SharedVramUsage = (long)GpuSharedBytesUsed;
                     SharedVramLimit = (long)GpuSharedLimit;
                 }
-
-                Marshal.FreeHGlobal(queryStatisticsPtr); //Free Allocated Memory
             }
             #endregion
         }
