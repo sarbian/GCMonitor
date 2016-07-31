@@ -577,19 +577,9 @@ namespace GCMonitor
             ALERT2
         }
 
-
         internal void Start()
         {
-            //print("Start - Creating UI");
-
-            //UItests();
-            //
-            //if (countersCanvas == null)
-            //{
-            //    UICreateCounters();
-            //
-            //    window = addWindow(UIMasterController.Instance.appCanvas.gameObject, "MyWindow");
-            //}
+            StartCoroutine(UILoad(1));
         }
 
         private void UItests()
@@ -734,6 +724,7 @@ namespace GCMonitor
             text1Obj.transform.SetParent(parent.transform, false);
 
             NicerOutline outline = text1Obj.AddComponent<NicerOutline>();
+            //BestFitOutline outline = text1Obj.AddComponent<BestFitOutline>();
             outline.effectColor = Color.black;
             
             return text;
@@ -940,6 +931,8 @@ namespace GCMonitor
 
         private MemState activeMemState;
 
+        private GameObject uiPrefab;
+
         private RawImage graph;
         private Text[] graphLabels;
         private Text infoKSP;
@@ -948,16 +941,16 @@ namespace GCMonitor
         private Text infoFPS;
         private Text precision;
         private Text topLabel;
-        private UnityEngine.UI.Button precisionPlus;
-        private UnityEngine.UI.Button precisionMinus;
+        private Button precisionPlus;
+        private Button precisionMinus;
         private Toggle toggleKSP;
         private Toggle toggleGPU;
         private Toggle toggleMono;
         private Toggle toggleRelative;
         private Toggle toggleColor;
         private Toggle toggleUpdate;
-        private UnityEngine.UI.Button topButton;
-        private UnityEngine.UI.Button configButton;        
+        private Button topButton;
+        private Button configButton;        
 
         private Toggle toggleLauncher;
         private Toggle toggleCounters;
@@ -971,256 +964,263 @@ namespace GCMonitor
         private Text counterX;
         private Text counterY;
 
-        private UnityEngine.UI.Button sizePlus;
-        private UnityEngine.UI.Button sizeMinus;
+        private Button sizePlus;
+        private Button sizeMinus;
 
-        private UnityEngine.UI.Button xPlus;
-        private UnityEngine.UI.Button xMinus;
+        private Button xPlus;
+        private Button xMinus;
 
-        private UnityEngine.UI.Button yPlus;
-        private UnityEngine.UI.Button yMinus;
+        private Button yPlus;
+        private Button yMinus;
 
         private UICollapsible configCollapsible;
 
-
-        private RectTransform prefabWindow;
+        private RectTransform uiWindow;
 
         // It seems the main menu unload all asset bundle after a couple of time
         // So I rebuild my UI after a few seconds
         void OnLevelWasLoaded()
         {
-            if (HighLogic.LoadedScene != GameScenes.MAINMENU || !AssetLoader.Ready)
-                return;
-            print("OnLevelWasLoaded");
-            StartCoroutine(ReloadAfterSec(1));
+            print("OnLevelWasLoaded " + HighLogic.LoadedScene);
+            print("Prefab is " + uiPrefab);
+
+            if (HighLogic.LoadedScene == GameScenes.MAINMENU)
+                StartCoroutine(UILoad(1));
         }
 
-        private IEnumerator ReloadAfterSec(int time)
+        private IEnumerator UILoad(int time)
         {
-            yield return new WaitForSeconds(time);
-            UILoad();
-        }
-
-        void UILoad()
-        {
-            if (!AssetLoader.Ready)
+            while (!AssetLoader.Ready)
+                yield return null;
+            
+            // The UI is already here. We are most likely reloading
+            if (uiWindow != null && HighLogic.LoadedScene == GameScenes.MAINMENU)
             {
-                print("Asset Loader not ready");
-                return;
+                print("Killing Previous UI " + uiWindow.gameObject + " parent is " + uiWindow.transform.parent);
+                Destroy(uiWindow.gameObject);
             }
 
-            if (prefabWindow != null)
-            {
-                print("Killing Previous UI");
-                Destroy(prefabWindow.gameObject);
-            }
+            if (HighLogic.LoadedScene == GameScenes.MAINMENU)
+                yield return new WaitForSeconds(time);
 
             print("Asset bundles load");
             var assetDefinition = AssetLoader.GetAssetDefinitionWithName("GCMonitor/gcmonitor", "Window");
-
-            print(AssetLoader.LoadAssets(UIInit, assetDefinition));
+            // This launch a coroutine so the result is not available immediately
+            AssetLoader.LoadAssets(UIInit, assetDefinition);
         }
-
-
+        
         void UIInit(AssetLoader.Loader loader)
         {
-            print("UIInit " + loader.definitions.Length + " defs");
+            //print("UIInit " + loader.definitions.Length + " defs");
             for (int i = 0; i < loader.definitions.Length; i++)
             {
                 UnityEngine.Object o = loader.objects[i];
+                
                 if (o == null)
                 {
                     print("Null def ??");
                     continue;
                 }
-                
-                Type oType = o.GetType();
 
-                print("UIInit " + oType.Name + " " + o.name );
-
-                print("Asset bundles Instantiate");
-                GameObject go = Instantiate(o as GameObject);
-
-                // Set the parrent to the stock appCanvas
-                go.transform.SetParent(UIMasterController.Instance.appCanvas.transform, false);
-
-                prefabWindow = go.transform as RectTransform;
-
-                graph = go            .GetComponentInChild<RawImage>("Graph");
-                graphLabels = go .GetChild("Labels").GetComponentsInChildren<Text>();
-                infoKSP = go          .GetComponentInChild<Text>("KSP");
-                infoGPU = go          .GetComponentInChild<Text>("GPU");
-                infoMono = go         .GetComponentInChild<Text>("Mono");
-                infoFPS = go          .GetComponentInChild<Text>("FPS");
-                precision = go        .GetComponentInChild<Text>("PrecisionCurrent");
-                topLabel = go        .GetComponentInChild<Text>("TopLabel");
-                precisionPlus = go    .GetComponentInChild<UnityEngine.UI.Button>("PrecisionPlus");
-                precisionMinus = go   .GetComponentInChild<UnityEngine.UI.Button>("PrecisionMinus");
-                toggleKSP = go        .GetComponentInChild<Toggle>("ToggleKSP");
-                toggleGPU = go        .GetComponentInChild<Toggle>("ToggleGPU");
-                toggleMono = go       .GetComponentInChild<Toggle>("ToggleMono");
-                                       
-                toggleRelative = go   .GetComponentInChild<Toggle>("ToggleRelative");
-                toggleColor = go      .GetComponentInChild<Toggle>("ToggleColor");
-                toggleUpdate = go     .GetComponentInChild<Toggle>("ToggleUpdate");
-
-                topButton = go     .GetComponentInChild<UnityEngine.UI.Button>("TopButton");
-                configButton = go     .GetComponentInChild<UnityEngine.UI.Button>("ConfigButton");
-                                       
-                configCollapsible = go.GetComponentInChild<UICollapsible>("ConfigPanel");
-                                       
-                toggleLauncher = go   .GetComponentInChild<Toggle>("ToggleLauncher");
-                toggleCounters = go   .GetComponentInChild<Toggle>("ToggleCounters");
-                toggleCounterFPS = go .GetComponentInChild<Toggle>("ToggleCounterFPS");
-                toggleCounterVSZ = go .GetComponentInChild<Toggle>("ToggleCounterVSZ");
-                toggleCounterRSS = go .GetComponentInChild<Toggle>("ToggleCounterRSS");
-                toggleCounterPeak = go.GetComponentInChild<Toggle>("ToggleCounterPeak");
-                toggleCounterGPU = go .GetComponentInChild<Toggle>("ToggleCounterGPU");
-                                       
-                counterSize = go      .GetComponentInChild<Text>("CounterSizeCurrent");
-                counterX = go         .GetComponentInChild<Text>("CounterXCurrent");
-                counterY = go         .GetComponentInChild<Text>("CounterYCurrent");
-                                       
-                sizePlus = go         .GetComponentInChild<UnityEngine.UI.Button>("CounterSizePlus");
-                sizeMinus = go        .GetComponentInChild<UnityEngine.UI.Button>("CounterSizeMinus");
-                                       
-                xPlus = go            .GetComponentInChild<UnityEngine.UI.Button>("CounterXPlus");
-                xMinus = go           .GetComponentInChild<UnityEngine.UI.Button>("CounterXMinus");
-                                       
-                yPlus = go            .GetComponentInChild<UnityEngine.UI.Button>("CounterYPlus");
-                yMinus = go           .GetComponentInChild<UnityEngine.UI.Button>("CounterYMinus");
-
-
-                // Force update the precision text
-                timeScale = timeScale;
-
-                precisionMinus.onClick.AddListener(() =>
+                if (o.name == "Window")
                 {
-                    if (timeScale > 1)
-                    {
-                        timeScale = timeScale >> 1;
-                        memoryHistory = new memoryState[width];
-                        fullUpdate = true;
-                    }
-                });
+                    print("Loading \"" + o.name +"\" from assetBundle");
+                    uiPrefab = o as GameObject;
 
-                precisionPlus.onClick.AddListener(() =>
-                {
-                    if (timeScale < 8)
-                    {
-                        timeScale = timeScale << 1;
-                        memoryHistory = new memoryState[width];
-                        fullUpdate = true;
-                    }
-                });
-
-                configButton.onClick.AddListener(() =>
-                {
-                    showConfUI = !showConfUI;
-                    configCollapsible.OnValueChanged(showConfUI);
-                });
-
-                topButton.onClick.AddListener(() =>
-                {
-                    topMemory = (long) memoryVsz;
-                });
-
-                toggleRelative.isOn = relative;
-                toggleColor.isOn = colorfulMode;
-                toggleUpdate.isOn = OnlyUpdateWhenDisplayed;
-
-                toggleRelative.onValueChanged.AddListener(b => { relative = b; fullUpdate = true; });
-                toggleColor.onValueChanged.AddListener(b =>
-                {
-                    colorfulMode = b;
-                    fullUpdate = true;
-                    if (colorfulMode) timeScale = 10;
-                });
-                toggleUpdate.onValueChanged.AddListener(b => { OnlyUpdateWhenDisplayed = b; });
-
-                toggleLauncher.isOn = useAppLauncher;
-                toggleCounters.isOn = memoryGizmo;
-                toggleCounterFPS.isOn = displayFps;
-                toggleCounterVSZ.isOn = displayMem;
-                toggleCounterRSS.isOn = displayMemRss;
-                toggleCounterPeak.isOn = displayPeakRss;
-                toggleCounterGPU.isOn = displayGpu;
-
-                toggleLauncher.onValueChanged.AddListener(b => { useAppLauncher = b; });
-                toggleCounters.onValueChanged.AddListener(b => { memoryGizmo = b; });
-                toggleCounterFPS.onValueChanged.AddListener(b => { displayFps = b; });
-                toggleCounterVSZ.onValueChanged.AddListener(b => { displayMem = b; });
-                toggleCounterRSS.onValueChanged.AddListener(b => { displayMemRss = b; });
-                toggleCounterPeak.onValueChanged.AddListener(b => { displayPeakRss = b; });
-                toggleCounterGPU.onValueChanged.AddListener(b => { displayGpu = b; });
-
-                counterSize.text = fpsSize.ToString();
-                counterX.text = CountersX.ToString();
-                counterY.text = CountersY.ToString();
-
-                sizePlus.onClick.AddListener(() =>
-                {
-                    if (Event.current.button == 0)
-                        fpsSize++;
-                    else if (Event.current.button == 1)
-                        fpsSize += 10;
-                    counterSize.text = fpsSize.ToString();
-                });
-                sizeMinus.onClick.AddListener(() =>
-                {
-                    print(Event.current.button);
-                    if (Event.current.button == 0)
-                        fpsSize--;
-                    else if (Event.current.button == 1)
-                        fpsSize -= 10;
-                    counterSize.text = fpsSize.ToString();
-                });
-
-                xPlus.onClick.AddListener(() =>
-                {
-                    if (Event.current.button == 0)
-                        CountersX++;
-                    else if (Event.current.button == 1)
-                        CountersX += 10;
-                    counterX.text = CountersX.ToString();
-                });
-                xMinus.onClick.AddListener(() =>
-                {
-                    if (Event.current.button == 0)
-                        CountersX--;
-                    else if (Event.current.button == 1)
-                        CountersX -= 10;
-                    counterX.text = CountersX.ToString();
-                });
-
-                yPlus.onClick.AddListener(() =>
-                {
-                    if (Event.current.button == 0)
-                        CountersY++;
-                    else if (Event.current.button == 1)
-                        CountersY += 10;
-                    counterY.text = CountersY.ToString();
-                });
-                yMinus.onClick.AddListener(() =>
-                {
-                    if (Event.current.button == 0)
-                        CountersY--;
-                    else if (Event.current.button == 1)
-                        CountersY -= 10;
-                    counterY.text = CountersY.ToString();
-                });
-
-                toggleKSP.isOn = realMemory;
-                toggleGPU.isOn = gpuMemory;
-                toggleMono.isOn = !realMemory && !gpuMemory;
-
-                toggleKSP.onValueChanged.AddListener(MemoryToogleEvent);
-                toggleGPU.onValueChanged.AddListener(MemoryToogleEvent);
-                toggleMono.onValueChanged.AddListener(MemoryToogleEvent);
-                
-                graph.texture = memoryTexture;
+                    UICreate(uiPrefab);
+                }
             }
         }
+
+        private void UICreate(GameObject prefab)
+        {
+            print("UI Instantiate");
+            GameObject go = Instantiate(prefab);
+
+            // Set the parrent to the stock appCanvas
+            go.transform.SetParent(UIMasterController.Instance.appCanvas.transform, false);
+
+            uiWindow = go.transform as RectTransform;
+
+            graph = go.GetComponentInChild<RawImage>("Graph");
+            graphLabels = go.GetChild("Labels").GetComponentsInChildren<Text>();
+            infoKSP = go.GetComponentInChild<Text>("KSP");
+            infoGPU = go.GetComponentInChild<Text>("GPU");
+            infoMono = go.GetComponentInChild<Text>("Mono");
+            infoFPS = go.GetComponentInChild<Text>("FPS");
+            precision = go.GetComponentInChild<Text>("PrecisionCurrent");
+            topLabel = go.GetComponentInChild<Text>("TopLabel");
+            precisionPlus = go.GetComponentInChild<Button>("PrecisionPlus");
+            precisionMinus = go.GetComponentInChild<Button>("PrecisionMinus");
+            toggleKSP = go.GetComponentInChild<Toggle>("ToggleKSP");
+            toggleGPU = go.GetComponentInChild<Toggle>("ToggleGPU");
+            toggleMono = go.GetComponentInChild<Toggle>("ToggleMono");
+
+            toggleRelative = go.GetComponentInChild<Toggle>("ToggleRelative");
+            toggleColor = go.GetComponentInChild<Toggle>("ToggleColor");
+            toggleUpdate = go.GetComponentInChild<Toggle>("ToggleUpdate");
+
+            topButton = go.GetComponentInChild<Button>("TopButton");
+            configButton = go.GetComponentInChild<Button>("ConfigButton");
+
+            configCollapsible = go.GetComponentInChild<UICollapsible>("ConfigPanel");
+
+            toggleLauncher = go.GetComponentInChild<Toggle>("ToggleLauncher");
+            toggleCounters = go.GetComponentInChild<Toggle>("ToggleCounters");
+            toggleCounterFPS = go.GetComponentInChild<Toggle>("ToggleCounterFPS");
+            toggleCounterVSZ = go.GetComponentInChild<Toggle>("ToggleCounterVSZ");
+            toggleCounterRSS = go.GetComponentInChild<Toggle>("ToggleCounterRSS");
+            toggleCounterPeak = go.GetComponentInChild<Toggle>("ToggleCounterPeak");
+            toggleCounterGPU = go.GetComponentInChild<Toggle>("ToggleCounterGPU");
+
+            counterSize = go.GetComponentInChild<Text>("CounterSizeCurrent");
+            counterX = go.GetComponentInChild<Text>("CounterXCurrent");
+            counterY = go.GetComponentInChild<Text>("CounterYCurrent");
+
+            sizePlus = go.GetComponentInChild<Button>("CounterSizePlus");
+            sizeMinus = go.GetComponentInChild<Button>("CounterSizeMinus");
+
+            xPlus = go.GetComponentInChild<Button>("CounterXPlus");
+            xMinus = go.GetComponentInChild<Button>("CounterXMinus");
+
+            yPlus = go.GetComponentInChild<Button>("CounterYPlus");
+            yMinus = go.GetComponentInChild<Button>("CounterYMinus");
+
+
+            // Force update the precision text
+            timeScale = timeScale;
+
+            precisionMinus.onClick.AddListener(() =>
+            {
+                if (timeScale > 1)
+                {
+                    timeScale = timeScale >> 1;
+                    memoryHistory = new memoryState[width];
+                    fullUpdate = true;
+                }
+            });
+
+            precisionPlus.onClick.AddListener(() =>
+            {
+                if (timeScale < 8)
+                {
+                    timeScale = timeScale << 1;
+                    memoryHistory = new memoryState[width];
+                    fullUpdate = true;
+                }
+            });
+
+            configButton.onClick.AddListener(() =>
+            {
+                showConfUI = !showConfUI;
+                configCollapsible.OnValueChanged(showConfUI);
+            });
+
+            topButton.onClick.AddListener(() =>
+            {
+                topMemory = (long)memoryVsz;
+            });
+
+            toggleRelative.isOn = relative;
+            toggleColor.isOn = colorfulMode;
+            toggleUpdate.isOn = OnlyUpdateWhenDisplayed;
+
+            toggleRelative.onValueChanged.AddListener(b => { relative = b; fullUpdate = true; });
+
+            toggleColor.onValueChanged.AddListener(b =>
+            {
+                colorfulMode = b;
+                fullUpdate = true;
+                if (colorfulMode) timeScale = 10;
+            });
+
+            toggleUpdate.onValueChanged.AddListener(b => { OnlyUpdateWhenDisplayed = b; });
+
+            toggleLauncher.isOn = useAppLauncher;
+            toggleCounters.isOn = memoryGizmo;
+            toggleCounterFPS.isOn = displayFps;
+            toggleCounterVSZ.isOn = displayMem;
+            toggleCounterRSS.isOn = displayMemRss;
+            toggleCounterPeak.isOn = displayPeakRss;
+            toggleCounterGPU.isOn = displayGpu;
+
+            toggleLauncher.onValueChanged.AddListener(b => { useAppLauncher = b; });
+            toggleCounters.onValueChanged.AddListener(b => { memoryGizmo = b; });
+            toggleCounterFPS.onValueChanged.AddListener(b => { displayFps = b; });
+            toggleCounterVSZ.onValueChanged.AddListener(b => { displayMem = b; });
+            toggleCounterRSS.onValueChanged.AddListener(b => { displayMemRss = b; });
+            toggleCounterPeak.onValueChanged.AddListener(b => { displayPeakRss = b; });
+            toggleCounterGPU.onValueChanged.AddListener(b => { displayGpu = b; });
+
+            counterSize.text = fpsSize.ToString();
+            counterX.text = CountersX.ToString();
+            counterY.text = CountersY.ToString();
+
+            sizePlus.onClick.AddListener(() =>
+            {
+                if (Event.current.button == 0)
+                    fpsSize++;
+                else if (Event.current.button == 1)
+                    fpsSize += 10;
+                counterSize.text = fpsSize.ToString();
+            });
+
+            sizeMinus.onClick.AddListener(() =>
+            {
+                if (Event.current.button == 0)
+                    fpsSize--;
+                else if (Event.current.button == 1)
+                    fpsSize -= 10;
+                counterSize.text = fpsSize.ToString();
+            });
+
+            xPlus.onClick.AddListener(() =>
+            {
+                if (Event.current.button == 0)
+                    CountersX++;
+                else if (Event.current.button == 1)
+                    CountersX += 10;
+                counterX.text = CountersX.ToString();
+            });
+
+            xMinus.onClick.AddListener(() =>
+            {
+                if (Event.current.button == 0)
+                    CountersX--;
+                else if (Event.current.button == 1)
+                    CountersX -= 10;
+                counterX.text = CountersX.ToString();
+            });
+
+            yPlus.onClick.AddListener(() =>
+            {
+                if (Event.current.button == 0)
+                    CountersY++;
+                else if (Event.current.button == 1)
+                    CountersY += 10;
+                counterY.text = CountersY.ToString();
+            });
+
+            yMinus.onClick.AddListener(() =>
+            {
+                if (Event.current.button == 0)
+                    CountersY--;
+                else if (Event.current.button == 1)
+                    CountersY -= 10;
+                counterY.text = CountersY.ToString();
+            });
+
+            toggleKSP.isOn = realMemory;
+            toggleGPU.isOn = gpuMemory;
+            toggleMono.isOn = !realMemory && !gpuMemory;
+
+            toggleKSP.onValueChanged.AddListener(MemoryToogleEvent);
+            toggleGPU.onValueChanged.AddListener(MemoryToogleEvent);
+            toggleMono.onValueChanged.AddListener(MemoryToogleEvent);
+
+            graph.texture = memoryTexture;
+        }
+
         private void MemoryToogleEvent(bool b)
         {
             fullUpdate = true;
@@ -1230,14 +1230,15 @@ namespace GCMonitor
 
         private void UIUpdate(processMemory mem)
         {
-            if (prefabWindow == null)
+            if (uiWindow == null)
                 return;
 
-            if (prefabWindow.gameObject.activeSelf != showUI)
-                prefabWindow.gameObject.SetActive(showUI);
+            if (uiWindow.gameObject.activeSelf != showUI)
+                uiWindow.gameObject.SetActive(showUI);
 
             if (!showUI)
                 return;
+
             Profiler.BeginSample("infoKSP");
             infoKSP.text = StringFormater.ConcatFormat("KSP: {0} kB / {1} kB", ConvertToKB(mem.vsz), ConvertToKB(maxAllowedMem));
             Profiler.EndSample();
@@ -1315,22 +1316,22 @@ namespace GCMonitor
                 return;
             }
             
-            if (prefabWindow == null && AssetLoader.Ready)
-            {
-                //print("Asset bundles");
-                //print(AssetLoader.BundleDefinitions.Count);
-                //foreach (BundleDefinition b in AssetLoader.BundleDefinitions)
-                //{
-                //    print(b.name + " " + b.createdTime + " " + b.path + " " + b.info + " " + b.urlName);
-                //}
-                //print(AssetLoader.AssetDefinitions.Count);
-                //foreach (AssetDefinition a in AssetLoader.AssetDefinitions)
-                //{
-                //    print(a.name + " " + a.type + " " + a.path);
-                //}
-
-                UILoad();
-            }
+            //if (uiWindow == null && AssetLoader.Ready)
+            //{
+            //    //print("Asset bundles");
+            //    //print(AssetLoader.BundleDefinitions.Count);
+            //    //foreach (BundleDefinition b in AssetLoader.BundleDefinitions)
+            //    //{
+            //    //    print(b.name + " " + b.createdTime + " " + b.path + " " + b.info + " " + b.urlName);
+            //    //}
+            //    //print(AssetLoader.AssetDefinitions.Count);
+            //    //foreach (AssetDefinition a in AssetLoader.AssetDefinitions)
+            //    //{
+            //    //    print(a.name + " " + a.type + " " + a.path);
+            //    //}
+            //
+            //    UILoad();
+            //}
 
             Profiler.BeginSample("SetActives");
             
