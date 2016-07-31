@@ -38,6 +38,7 @@ using UnityEngine.UI;
 using UnityEngine.UI.Extensions;
 //using UnityEngine.UI.Extensions;
 using Debug = UnityEngine.Debug;
+using Button = UnityEngine.UI.Button;
 using File = KSP.IO.File;
 using Resources = GCMonitor.Properties.Resources;
 
