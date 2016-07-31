@@ -38,7 +38,6 @@ using UnityEngine.UI;
 using UnityEngine.UI.Extensions;
 //using UnityEngine.UI.Extensions;
 using Debug = UnityEngine.Debug;
-using Button = UnityEngine.UI.Button;
 using File = KSP.IO.File;
 using Resources = GCMonitor.Properties.Resources;
 
@@ -949,16 +948,16 @@ namespace GCMonitor
         private Text infoFPS;
         private Text precision;
         private Text topLabel;
-        private Button precisionPlus;
-        private Button precisionMinus;
+        private UnityEngine.UI.Button precisionPlus;
+        private UnityEngine.UI.Button precisionMinus;
         private Toggle toggleKSP;
         private Toggle toggleGPU;
         private Toggle toggleMono;
         private Toggle toggleRelative;
         private Toggle toggleColor;
         private Toggle toggleUpdate;
-        private Button topButton;
-        private Button configButton;        
+        private UnityEngine.UI.Button topButton;
+        private UnityEngine.UI.Button configButton;        
 
         private Toggle toggleLauncher;
         private Toggle toggleCounters;
@@ -972,14 +971,14 @@ namespace GCMonitor
         private Text counterX;
         private Text counterY;
 
-        private Button sizePlus;
-        private Button sizeMinus;
+        private UnityEngine.UI.Button sizePlus;
+        private UnityEngine.UI.Button sizeMinus;
 
-        private Button xPlus;
-        private Button xMinus;
+        private UnityEngine.UI.Button xPlus;
+        private UnityEngine.UI.Button xMinus;
 
-        private Button yPlus;
-        private Button yMinus;
+        private UnityEngine.UI.Button yPlus;
+        private UnityEngine.UI.Button yMinus;
 
         private UICollapsible configCollapsible;
 
@@ -1074,8 +1073,8 @@ namespace GCMonitor
             infoFPS = go.GetComponentInChild<Text>("FPS");
             precision = go.GetComponentInChild<Text>("PrecisionCurrent");
             topLabel = go.GetComponentInChild<Text>("TopLabel");
-            precisionPlus = go.GetComponentInChild<Button>("PrecisionPlus");
-            precisionMinus = go.GetComponentInChild<Button>("PrecisionMinus");
+            precisionPlus = go.GetComponentInChild<UnityEngine.UI.Button>("PrecisionPlus");
+            precisionMinus = go.GetComponentInChild<UnityEngine.UI.Button>("PrecisionMinus");
             toggleKSP = go.GetComponentInChild<Toggle>("ToggleKSP");
             toggleGPU = go.GetComponentInChild<Toggle>("ToggleGPU");
             toggleMono = go.GetComponentInChild<Toggle>("ToggleMono");
@@ -1084,8 +1083,8 @@ namespace GCMonitor
             toggleColor = go.GetComponentInChild<Toggle>("ToggleColor");
             toggleUpdate = go.GetComponentInChild<Toggle>("ToggleUpdate");
 
-            topButton = go.GetComponentInChild<Button>("TopButton");
-            configButton = go.GetComponentInChild<Button>("ConfigButton");
+            topButton = go.GetComponentInChild<UnityEngine.UI.Button>("TopButton");
+            configButton = go.GetComponentInChild<UnityEngine.UI.Button>("ConfigButton");
 
             configCollapsible = go.GetComponentInChild<UICollapsible>("ConfigPanel");
 
@@ -1101,14 +1100,14 @@ namespace GCMonitor
             counterX = go.GetComponentInChild<Text>("CounterXCurrent");
             counterY = go.GetComponentInChild<Text>("CounterYCurrent");
 
-            sizePlus = go.GetComponentInChild<Button>("CounterSizePlus");
-            sizeMinus = go.GetComponentInChild<Button>("CounterSizeMinus");
+            sizePlus = go.GetComponentInChild<UnityEngine.UI.Button>("CounterSizePlus");
+            sizeMinus = go.GetComponentInChild<UnityEngine.UI.Button>("CounterSizeMinus");
 
-            xPlus = go.GetComponentInChild<Button>("CounterXPlus");
-            xMinus = go.GetComponentInChild<Button>("CounterXMinus");
+            xPlus = go.GetComponentInChild<UnityEngine.UI.Button>("CounterXPlus");
+            xMinus = go.GetComponentInChild<UnityEngine.UI.Button>("CounterXMinus");
 
-            yPlus = go.GetComponentInChild<Button>("CounterYPlus");
-            yMinus = go.GetComponentInChild<Button>("CounterYMinus");
+            yPlus = go.GetComponentInChild<UnityEngine.UI.Button>("CounterYPlus");
+            yMinus = go.GetComponentInChild<UnityEngine.UI.Button>("CounterYMinus");
 
 
             // Force update the precision text
