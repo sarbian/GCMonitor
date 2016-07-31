@@ -432,20 +432,20 @@ namespace GCMonitor
             public int microseconds;
         }
 
-        private struct task_basic_info
+        private struct mach_task_basic_info
         {
-            public int suspend_count;
             public IntPtr virtual_size;
             public IntPtr resident_size;
+            public IntPtr resident_size_max;
             public time_value user_time;
             public time_value system_time;
             public int policy;
+            public IntPtr suspend_count;
         } 
         
         private enum task_flavor_t
         {
-            TASK_BASIC_INFO_32 = 4,
-            TASK_BASIC_INFO_64 = 5,
+            MACH_TASK_BASIC_INFO = 20,
         }
 
         [DllImport("libc.dylib")]
@@ -459,9 +459,9 @@ namespace GCMonitor
 
         private static unsafe processMemory getProcessMemoryOSX()
         {
-            var resultOSX = new task_basic_info();
+            var resultOSX = new mach_task_basic_info();
             task_info(mach_task_self(), taskFlavorOSX, new IntPtr(&resultOSX), ref structureLengthOSX);
-            return new processMemory((ulong)resultOSX.resident_size, (ulong)resultOSX.virtual_size, maxAllowedMem);
+            return new processMemory((ulong)resultOSX.resident_size, (ulong)resultOSX.virtual_size, (ulong)resultOSX.resident_size_max);
         }
         
         private static processMemory getProcessMemory_unimplemented()
@@ -497,7 +497,7 @@ namespace GCMonitor
             spaceFormat = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
             spaceFormat.NumberGroupSeparator = " ";
 
-            Debug.Log("[GCMonitor] Setting up getRSS delegates");
+            Debug.Log("[GCMonitor] Setting up getRSS delegates for " + Application.platform);
             switch (Application.platform)
             {
                 case RuntimePlatform.LinuxPlayer:
@@ -505,8 +505,11 @@ namespace GCMonitor
                     getProcessMemory = getProcessMemoryLinux;
                     break;
                 case RuntimePlatform.OSXPlayer:
-                    taskFlavorOSX = IsX64() ? task_flavor_t.TASK_BASIC_INFO_64 : task_flavor_t.TASK_BASIC_INFO_32;
-                    structureLengthOSX = Marshal.SizeOf(typeof(task_basic_info)) / IntPtr.Size;
+                    taskFlavorOSX = task_flavor_t.MACH_TASK_BASIC_INFO;
+
+                    Debug.Log("[GCMonitor] Running on 64bit : " + IsX64());
+        
+                    structureLengthOSX = Marshal.SizeOf(typeof(mach_task_basic_info)) / IntPtr.Size;
                     getProcessMemory = getProcessMemoryOSX;
                     break;
                 case RuntimePlatform.WindowsPlayer:
@@ -523,6 +526,9 @@ namespace GCMonitor
             try
             {
                 processMemory p = getProcessMemory();
+                Debug.Log("[GCMonitor] Memory reporting setup OK. rss = " + p.rss + " vsz = " + p.vsz + " max = " + p.max);
+
+
             }
             catch (Exception e)
             {
