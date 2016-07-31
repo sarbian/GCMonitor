@@ -38,6 +38,7 @@ using UnityEngine.UI;
 using UnityEngine.UI.Extensions;
 //using UnityEngine.UI.Extensions;
 using Debug = UnityEngine.Debug;
+using File = KSP.IO.File;
 using Resources = GCMonitor.Properties.Resources;
 
 namespace GCMonitor
@@ -982,37 +983,53 @@ namespace GCMonitor
         private UICollapsible configCollapsible;
 
         private RectTransform uiWindow;
-
-        // It seems the main menu unload all asset bundle after a couple of time
-        // So I rebuild my UI after a few seconds
-        void OnLevelWasLoaded()
-        {
-            print("OnLevelWasLoaded " + HighLogic.LoadedScene);
-            print("Prefab is " + uiPrefab);
-
-            if (HighLogic.LoadedScene == GameScenes.MAINMENU)
-                StartCoroutine(UILoad(1));
-        }
-
+        
         private IEnumerator UILoad(int time)
         {
-            while (!AssetLoader.Ready)
-                yield return null;
+            // Loading of the asset bundle by the stock code.
+            //print("Asset bundles load");
+            //var assetDefinition = AssetLoader.GetAssetDefinitionWithName("GCMonitor/gcmonitor", "Window");
+            //// This launch a coroutine so the result is not available immediately
+            //AssetLoader.LoadAssets(UIInit, assetDefinition);
+
+            var path = KSPUtil.ApplicationRootPath + "GameData/GCMonitor/gcmonitor.ksp";
+
+
+            // TODO : use LoadFromFileAsync after Unity upgrade.
+            //AssetBundle bundle = AssetBundle.LoadFromFileAsync(KSPUtil.ApplicationRootPath + "GameData/GCMonitor/gcmonitor.ksp");
             
-            // The UI is already here. We are most likely reloading
-            if (uiWindow != null && HighLogic.LoadedScene == GameScenes.MAINMENU)
+            print("Asset bundles load");
+            WWW bundleRequest = new WWW("file://" + path);
+
+            yield return bundleRequest;
+
+            if (bundleRequest.assetBundle == null)
             {
-                print("Killing Previous UI " + uiWindow.gameObject + " parent is " + uiWindow.transform.parent);
-                Destroy(uiWindow.gameObject);
+                print("Failed to load AssetBundle!\n" + path + "\n" + bundleRequest.error + "\n" + bundleRequest.assetBundle);
+                yield break;
             }
 
-            if (HighLogic.LoadedScene == GameScenes.MAINMENU)
-                yield return new WaitForSeconds(time);
+            //print("Bundle content");
+            //string[] allAssetNames = bundleRequest.assetBundle.GetAllAssetNames();
+            //foreach (string assetName in allAssetNames)
+            //{
+            //    print(assetName);
+            //}
+            //print("------");
 
-            print("Asset bundles load");
-            var assetDefinition = AssetLoader.GetAssetDefinitionWithName("GCMonitor/gcmonitor", "Window");
-            // This launch a coroutine so the result is not available immediately
-            AssetLoader.LoadAssets(UIInit, assetDefinition);
+            var loadRequest = bundleRequest.assetBundle.LoadAssetAsync<GameObject>("assets/prefabs/window.prefab");
+
+            yield return loadRequest;
+
+            uiPrefab = loadRequest.asset as GameObject;
+
+            if (uiPrefab == null)
+            {
+                print("Failed to find the prefab in the AssetBundle!");
+                yield break;
+            }
+            
+            UICreate(uiPrefab);
         }
         
         void UIInit(AssetLoader.Loader loader)
