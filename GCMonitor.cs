@@ -32,6 +32,7 @@ using KSP.IO;
 using KSP.UI;
 using KSP.UI.Screens;
 using KSPAssets.Loaders;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -166,11 +167,11 @@ namespace GCMonitor
 
         private RectTransform panelPos;
 
-        private Text memVszText;
-        private Text memRssText;
-        private Text memPeakRssText;
-        private Text memGpuText;
-        private Text memFpsText;
+        private TextMeshProUGUI memVszText;
+        private TextMeshProUGUI memRssText;
+        private TextMeshProUGUI memPeakRssText;
+        private TextMeshProUGUI memGpuText;
+        private TextMeshProUGUI memFpsText;
 
         long displayMaxMemory = 200;
         long displayMinMemory = 0;
@@ -708,7 +709,7 @@ namespace GCMonitor
             memFpsText = addTextOutline(panelPos.gameObject, "Fps");
         }
 
-        private static Text addTextOutline(GameObject parent, string s)
+        private static TextMeshProUGUI addTextOutline(GameObject parent, string s)
         {
             GameObject text1Obj = new GameObject("Text");
 
@@ -717,22 +718,28 @@ namespace GCMonitor
             RectTransform trans = text1Obj.AddComponent<RectTransform>();
             trans.localScale = new Vector3(1, 1, 1);
             trans.localPosition.Set(0, 0, 0);
+
+            TextMeshProUGUI text = text1Obj.AddComponent<TextMeshProUGUI>();
             
-            Text text = text1Obj.AddComponent<Text>();
-            text.supportRichText = true;
             text.text = s;
             text.fontSize = 24;
-            text.font = UISkinManager.defaultSkin.font;
+            text.autoSizeTextContainer = true;
 
-            text.alignment = TextAnchor.UpperLeft;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.font = UnityEngine.Resources.Load("Fonts/Calibri SDF", typeof(TMP_FontAsset)) as TMP_FontAsset;
+            text.fontSharedMaterial = UnityEngine.Resources.Load("Fonts/Materials/Calibri Dropshadow", typeof(Material)) as Material;
+
+            text.enableWordWrapping = false;
+
+            text.isOverlay = true;
+            
+
+            //text.renderer.sharedMaterial = text.font.material;
+
+            //text.alignment = TextAnchor.UpperLeft;
+            //text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            //text.verticalOverflow = VerticalWrapMode.Truncate;
             text.color = Color.white;
             text1Obj.transform.SetParent(parent.transform, false);
-
-            NicerOutline outline = text1Obj.AddComponent<NicerOutline>();
-            //BestFitOutline outline = text1Obj.AddComponent<BestFitOutline>();
-            outline.effectColor = Color.black;
             
             return text;
         }
