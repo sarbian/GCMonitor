@@ -728,16 +728,15 @@ namespace GCMonitor
             text.font = UnityEngine.Resources.Load("Fonts/Calibri SDF", typeof(TMP_FontAsset)) as TMP_FontAsset;
             text.fontSharedMaterial = UnityEngine.Resources.Load("Fonts/Materials/Calibri Dropshadow", typeof(Material)) as Material;
 
-            text.enableWordWrapping = false;
+            text.enableWordWrapping = true;
 
             text.isOverlay = true;
-            
+            text.characterSpacing = 2;
 
-            //text.renderer.sharedMaterial = text.font.material;
 
-            //text.alignment = TextAnchor.UpperLeft;
-            //text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            //text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.alignment = TextAlignmentOptions.Right;
+            //text.OverflowMode = TextOverflowModes.Overflow;
+
             text.color = Color.white;
             text1Obj.transform.SetParent(parent.transform, false);
             
