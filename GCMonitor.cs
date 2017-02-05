@@ -57,7 +57,7 @@ namespace GCMonitor
 
         private bool hiddenUI = false;
 
-        readonly Texture2D memoryTexture = new Texture2D(width, height, TextureFormat.ARGB32, false);
+        Texture2D memoryTexture;
         float ratio;
 
         private int _timeScale = 1;
@@ -483,7 +483,9 @@ namespace GCMonitor
                 ConfigNode config = ConfigNode.Load(IOUtils.GetFilePathFor(this.GetType(), "GCMonitor.cfg"));
                 ConfigNode.LoadObjectFromConfig(this, config);
             }
-            
+
+            memoryTexture = new Texture2D(width, height, TextureFormat.ARGB32, false);
+
             line = new Color[height];
             blackLine = new Color[height];
             for (int i = 0; i < blackLine.Length; i++)
@@ -587,7 +589,7 @@ namespace GCMonitor
 
         internal void Start()
         {
-            StartCoroutine(UILoad(1));
+            StartCoroutine(UILoad());
         }
 
         private void UItests()
@@ -990,7 +992,7 @@ namespace GCMonitor
 
         private RectTransform uiWindow;
         
-        private IEnumerator UILoad(int time)
+        private IEnumerator UILoad()
         {
             // Loading of the asset bundle by the stock code.
             //print("Asset bundles load");
@@ -1001,17 +1003,16 @@ namespace GCMonitor
             var path = KSPUtil.ApplicationRootPath + "GameData/GCMonitor/gcmonitor.ksp";
 
 
-            // TODO : use LoadFromFileAsync after Unity upgrade.
-            //AssetBundle bundle = AssetBundle.LoadFromFileAsync(KSPUtil.ApplicationRootPath + "GameData/GCMonitor/gcmonitor.ksp");
-            
             print("Asset bundles load");
-            WWW bundleRequest = new WWW("file://" + path);
-
+            AssetBundleCreateRequest bundleRequest = AssetBundle.LoadFromFileAsync(KSPUtil.ApplicationRootPath + "GameData/GCMonitor/gcmonitor.ksp");
+            
             yield return bundleRequest;
 
-            if (bundleRequest.assetBundle == null)
+            AssetBundle bundle = bundleRequest.assetBundle;
+
+            if (bundle == null)
             {
-                print("Failed to load AssetBundle!\n" + path + "\n" + bundleRequest.error + "\n" + bundleRequest.assetBundle);
+                print("Failed to load AssetBundle!\n" + path + "\n" + bundleRequest.assetBundle);
                 yield break;
             }
 
@@ -1023,7 +1024,7 @@ namespace GCMonitor
             //}
             //print("------");
 
-            var loadRequest = bundleRequest.assetBundle.LoadAssetAsync<GameObject>("assets/prefabs/window.prefab");
+            AssetBundleRequest loadRequest = bundle.LoadAssetAsync<GameObject>("assets/prefabs/window.prefab");
 
             yield return loadRequest;
 
