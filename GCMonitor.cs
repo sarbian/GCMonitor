@@ -26,6 +26,8 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using KSP.IO;
@@ -40,11 +42,12 @@ using UnityEngine.UI.Extensions;
 //using UnityEngine.UI.Extensions;
 using Debug = UnityEngine.Debug;
 using File = KSP.IO.File;
+using Object = UnityEngine.Object;
 using Resources = GCMonitor.Properties.Resources;
 
 namespace GCMonitor
 {
-    [KSPAddon(KSPAddon.Startup.Instantly, false)]
+    [KSPAddon(KSPAddon.Startup.Instantly, true)]
     public class GCMonitor : MonoBehaviour
     {
         private const int width = 1024;
@@ -52,7 +55,7 @@ namespace GCMonitor
 
         const int GraphLabelsCount = 4;
         
-        private bool showUI = false;
+        private bool showUI = true;
         private bool showConfUI = false;
 
         private bool hiddenUI = false;
@@ -60,6 +63,7 @@ namespace GCMonitor
         Texture2D memoryTexture;
         float ratio;
 
+        [Persistent]
         private int _timeScale = 1;
         int timeScale
         {
@@ -161,6 +165,8 @@ namespace GCMonitor
         int fpsXEditor = 10;
         [Persistent]
         int fpsYEditor = 200;
+
+        private Canvas canvas;
 
         //private IButton tbButton;
         private ApplicationLauncherButton alButton;
@@ -476,7 +482,7 @@ namespace GCMonitor
 
         internal void Awake()
         {
-            DontDestroyOnLoad(gameObject);
+            DontDestroyOnLoad(this);
 
             if (File.Exists<GCMonitor>("GCMonitor.cfg"))
             {
@@ -587,10 +593,50 @@ namespace GCMonitor
             ALERT2
         }
 
+        private static TMP_FontAsset font;
+        private static Material fontMaterial;
+
         internal void Start()
         {
+            //var fonts = UnityEngine.Resources.LoadAll("Fonts", typeof(TMP_FontAsset));
+            //var materials = UnityEngine.Resources.LoadAll("Fonts", typeof(Material));
+            //
+            //
+            //Debug.Log("-----Fonts-------");
+            //
+            //foreach (var f in fonts)
+            //    Debug.Log(f.GetType().Name + " \"" + f.name + "\" " + f.ToString());
+            //
+            //Debug.Log("-----Materials-------");
+            //foreach (var m in materials)
+            //    Debug.Log(m.GetType().Name + " " + m.name);
+
+
+            LoadFont();
+            UICreateCounters();
+            //GameEvents.onLevelWasLoaded.Add(ReloadEvent);
+
             StartCoroutine(UILoad());
         }
+
+        void LoadFont()
+        {
+            //yield return new WaitForSeconds(2);
+
+            print("Font is " + (font == null));
+
+            
+            print("Loading font from Resources");
+            Object[] fonts = UnityEngine.Resources.LoadAll("Fonts", typeof(TMP_FontAsset));
+            font = (TMP_FontAsset)fonts.FirstOrDefault(f => f.name == "NotoSans-Regular SDF");
+            //font = (TMP_FontAsset)fonts.FirstOrDefault(f => f.name == "Calibri SDF");
+            
+
+            Object[] materials = UnityEngine.Resources.LoadAll("Fonts", typeof(Material));
+            fontMaterial = (Material)materials.FirstOrDefault(f => f.name == "NotoSans-Regular Dropshadow Outline");
+            //fontMaterial = (Material)materials.FirstOrDefault(f => f.name == "Calibri Dropshadow Outline");
+        }
+
 
         private void UItests()
         {
@@ -727,8 +773,9 @@ namespace GCMonitor
             text.fontSize = 24;
             text.autoSizeTextContainer = true;
 
-            text.font = UnityEngine.Resources.Load("Fonts/Calibri SDF", typeof(TMP_FontAsset)) as TMP_FontAsset;
-            text.fontSharedMaterial = UnityEngine.Resources.Load("Fonts/Materials/Calibri Dropshadow", typeof(Material)) as Material;
+            text.font = font;
+            //text.fontSharedMaterial = fontMaterial;
+            text.fontMaterial = fontMaterial;
 
             text.enableWordWrapping = true;
 
@@ -1037,6 +1084,8 @@ namespace GCMonitor
             }
             
             UICreate(uiPrefab);
+
+            //bundle.Unload(false);
         }
         
         void UIInit(AssetLoader.Loader loader)
@@ -1062,12 +1111,36 @@ namespace GCMonitor
             }
         }
 
+
+        private Canvas CloneAppCanvas()
+        {
+            GameObject canvasObj = new GameObject();
+            // Copy the components of the stock canvas
+            Canvas canvas = canvasObj.AddComponent(UIMasterController.Instance.appCanvas);
+            CanvasScaler canvasScaler = canvasObj.AddComponent(UIMasterController.Instance.appCanvas.GetComponent<CanvasScaler>());
+            GraphicRaycaster raycaster = canvasObj.AddComponent<GraphicRaycaster>(UIMasterController.Instance.appCanvas.GetComponent<GraphicRaycaster>());
+            CanvasGroup group = canvasObj.AddComponent(UIMasterController.Instance.appCanvas.GetComponent<CanvasGroup>());
+            CanvasGroupInputLock groupInputLock = canvasObj.AddComponent(UIMasterController.Instance.appCanvas.GetComponent<CanvasGroupInputLock>());
+            CanvasPixelPerfectHandler pixelPerfectHandler = canvasObj.AddComponent(UIMasterController.Instance.appCanvas.GetComponent<CanvasPixelPerfectHandler>());
+            pixelPerfectHandler.canvas = canvas;
+            
+            //canvas = UIMasterController.Instance.appCanvas.transform;
+
+            print("CloneAppCanvas Components");
+            foreach (Component c in canvasObj.GetComponents<Component>())
+            {
+                print(c.GetType().Name);
+            }
+
+            return canvas;
+        }
+        
+
         private void UICreate(GameObject prefab)
         {
             print("UI Instantiate");
             GameObject go = Instantiate(prefab);
-
-            // Set the parrent to the stock appCanvas
+            
             go.transform.SetParent(UIMasterController.Instance.appCanvas.transform, false);
 
             uiWindow = go.transform as RectTransform;
@@ -1332,37 +1405,11 @@ namespace GCMonitor
             }
 
             UpdateBuffer();
-            //CalculateFPS();
-
-            if (panelPos == null)
-            {
-                //UItests();
-
-                UICreateCounters();
-
-                //window = addWindow(UIMasterController.Instance.appCanvas.gameObject, "MyWindow");
-                //Canvas.ForceUpdateCanvases();
-                
-                return;
-            }
             
-            //if (uiWindow == null && AssetLoader.Ready)
-            //{
-            //    //print("Asset bundles");
-            //    //print(AssetLoader.BundleDefinitions.Count);
-            //    //foreach (BundleDefinition b in AssetLoader.BundleDefinitions)
-            //    //{
-            //    //    print(b.name + " " + b.createdTime + " " + b.path + " " + b.info + " " + b.urlName);
-            //    //}
-            //    //print(AssetLoader.AssetDefinitions.Count);
-            //    //foreach (AssetDefinition a in AssetLoader.AssetDefinitions)
-            //    //{
-            //    //    print(a.name + " " + a.type + " " + a.path);
-            //    //}
-            //
-            //    UILoad();
-            //}
+            if (panelPos == null)
+                return;
 
+            
             Profiler.BeginSample("SetActives");
             
             memVszText.gameObject.SetActive(memoryGizmo && displayMem);
@@ -2151,5 +2198,40 @@ namespace GCMonitor
 
 
 
+    }
+
+    public static class ComponentExts
+    {
+        // http://answers.unity3d.com/answers/641022/view.html
+        public static T GetCopyOf<T>(this Component comp, T other) where T : Component
+        {
+            Type type = comp.GetType();
+            if (type != other.GetType()) return null; // type mis-match
+            BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Default | BindingFlags.DeclaredOnly;
+            PropertyInfo[] pinfos = type.GetProperties(flags);
+            foreach (var pinfo in pinfos)
+            {
+                if (pinfo.CanWrite)
+                {
+                    try
+                    {
+                        pinfo.SetValue(comp, pinfo.GetValue(other, null), null);
+                    }
+                    catch { } // In case of NotImplementedException being thrown. For some reason specifying that exception didn't seem to catch it, so I didn't catch anything specific.
+                }
+            }
+            FieldInfo[] finfos = type.GetFields(flags);
+            foreach (var finfo in finfos)
+            {
+                finfo.SetValue(comp, finfo.GetValue(other));
+            }
+            return comp as T;
+        }
+
+
+        public static T AddComponent<T>(this GameObject go, T toAdd) where T : Component
+        {
+            return go.AddComponent<T>().GetCopyOf(toAdd) as T;
+        }
     }
 }
