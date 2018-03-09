@@ -22,6 +22,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 
+using KSP.IO;
+using KSP.UI;
+using KSP.UI.Screens;
+using KSPAssets.Loaders;
 using System;
 using System.Collections;
 using System.Diagnostics;
@@ -30,13 +34,10 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
-using KSP.IO;
-using KSP.UI;
-using KSP.UI.Screens;
-using KSPAssets.Loaders;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Profiling;
 using UnityEngine.UI;
 using UnityEngine.UI.Extensions;
 //using UnityEngine.UI.Extensions;
@@ -1350,7 +1351,7 @@ namespace GCMonitor
             Profiler.EndSample();
             Profiler.BeginSample("infoMono");
             memoryState memoryState = memoryHistory[activeSecond];
-            infoMono.text = StringFormater.ConcatFormat("Mono allocated:{0} MB min: {1} MB max: {2} MB GC : {3} MB", ConvertToMB(Profiler.GetTotalAllocatedMemory()), ConvertToMB(memoryState.min), ConvertToMB(memoryState.max), memoryState.gc);
+            infoMono.text = StringFormater.ConcatFormat("Mono allocated:{0} MB min: {1} MB max: {2} MB GC : {3} MB", ConvertToMB(Profiler.GetTotalAllocatedMemoryLong()), ConvertToMB(memoryState.min), ConvertToMB(memoryState.max), memoryState.gc);
             Profiler.EndSample();
             Profiler.BeginSample("infoFPS");
             infoFPS.text = StringFormater.ConcatFormat("FPS: {0:000.0}", fps);
